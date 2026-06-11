@@ -55,7 +55,11 @@ def save_ledger(cwd, ledger):
 
 
 def normalize(path, cwd):
-    """Absolute, symlink-resolved path so Read('./a.py') grounds Edit('/abs/a.py')."""
+    """Absolute, symlink-resolved path so Read('./a.py') grounds Edit('/abs/a.py').
+
+    Expands `~` first: shell-derived targets (e.g. `>> ~/.zshrc`) arrive unexpanded.
+    """
+    path = os.path.expanduser(path)
     if not os.path.isabs(path):
         path = os.path.join(cwd, path)
     return os.path.realpath(path)
