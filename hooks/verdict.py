@@ -29,3 +29,47 @@ def gate_file_action(tool_name, path, file_exists, read_files):
         "Do not edit from guesswork — read the file with the Read tool "
         "first, then retry.",
     )
+
+
+def gate_shell_write(path, mode, file_exists, read_files):
+    """G-1 for shell-mediated writes (sed -i, tee, redirections).
+
+    Truncating or rewriting a file never seen destroys content blindly →
+    STOP. Appending preserves what's there, so it only warns.
+    """
+    if not file_exists:
+        return Verdict(PASS, "creating a new file needs no prior read")
+    if path in read_files:
+        return Verdict(PASS, "file was read this session")
+    if mode == "append":
+        return Verdict(
+            WARN,
+            f"[grounded G-1] This command appends to {path}, which was never "
+            "read this session. The append will proceed, but consider reading "
+            "the file first to make sure the addition fits what is already there.",
+        )
+    return Verdict(
+        STOP,
+        f"[grounded G-1] This command overwrites {path} ({mode}) but there is "
+        "no record of reading it this session. Read the file first (Read tool "
+        "or cat), then retry.",
+    )
+
+
+def gate_package(ecosystem, name, exists):
+    """G-2: a package may only be installed if the registry confirms it exists.
+
+    `exists` is tri-state from registry.check_package; None (unreachable,
+    rate-limited) must pass — a network hiccup is not evidence of hallucination.
+    """
+    import registry
+
+    if exists is False:
+        return Verdict(
+            STOP,
+            f"[grounded G-2] Package '{name}' was not found on "
+            f"{registry.registry_label(ecosystem)}. This usually means a "
+            "hallucinated or misspelled package name. Search the registry for "
+            "the correct name before installing.",
+        )
+    return Verdict(PASS, "package exists" if exists else "registry unknown — not blocking")

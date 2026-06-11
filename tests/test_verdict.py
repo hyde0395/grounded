@@ -27,5 +27,46 @@ class GateFileActionTest(unittest.TestCase):
         self.assertEqual(v.decision, verdict.STOP)
 
 
+class GateShellWriteTest(unittest.TestCase):
+    def test_truncate_unread_existing_is_stop(self):
+        v = verdict.gate_shell_write("/p/a.py", "truncate", file_exists=True, read_files={})
+        self.assertEqual(v.decision, verdict.STOP)
+        self.assertIn("/p/a.py", v.reason)
+
+    def test_inplace_unread_existing_is_stop(self):
+        v = verdict.gate_shell_write("/p/a.py", "inplace", file_exists=True, read_files={})
+        self.assertEqual(v.decision, verdict.STOP)
+
+    def test_append_unread_existing_is_warn(self):
+        v = verdict.gate_shell_write("/p/a.py", "append", file_exists=True, read_files={})
+        self.assertEqual(v.decision, verdict.WARN)
+        self.assertIn("/p/a.py", v.reason)
+
+    def test_read_file_is_pass(self):
+        v = verdict.gate_shell_write("/p/a.py", "truncate", file_exists=True,
+                                     read_files={"/p/a.py": 1})
+        self.assertEqual(v.decision, verdict.PASS)
+
+    def test_new_file_is_pass(self):
+        v = verdict.gate_shell_write("/p/new.py", "truncate", file_exists=False, read_files={})
+        self.assertEqual(v.decision, verdict.PASS)
+
+
+class GatePackageTest(unittest.TestCase):
+    def test_exists_is_pass(self):
+        v = verdict.gate_package("pypi", "requests", exists=True)
+        self.assertEqual(v.decision, verdict.PASS)
+
+    def test_absent_is_stop_naming_registry(self):
+        v = verdict.gate_package("pypi", "reqests", exists=False)
+        self.assertEqual(v.decision, verdict.STOP)
+        self.assertIn("reqests", v.reason)
+        self.assertIn("PyPI", v.reason)
+
+    def test_unknown_is_pass(self):
+        v = verdict.gate_package("npm", "foo", exists=None)
+        self.assertEqual(v.decision, verdict.PASS)
+
+
 if __name__ == "__main__":
     unittest.main()
