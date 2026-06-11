@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>grounded — 근거 강제 가드레일 설계</title>
+<style>
+  :root{
+    /* signal palette: a claim is either grounded or it is stopped */
+    --void:#0d0f14;
+    --panel:#14171f;
+    --panel-2:#1a1e28;
+    --line:#2a2f3a;
+    --line-bright:#3a414f;
+    --ink:#e8eaed;
+    --ink-dim:#9aa3b2;
+    --ink-faint:#646c7a;
+    --pass:#4ade80;     /* grounded → allow */
+    --warn:#fbbf24;     /* uncertain → soft warn */
+    --stop:#f43f5e;     /* ungrounded → block */
+    --wire:#5b8def;     /* data flow */
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono","Cascadia Code",Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--void);
+    color:var(--ink);
+    font-family:var(--mono);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:940px;margin:0 auto;padding:0 28px}
+
+  /* hero */
+  header.hero{padding:72px 0 48px;border-bottom:1px solid var(--line)}
+  .kicker{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:28px}
+
+  /* the signature: a claim passing through a gate */
+  .gate{margin:0 0 40px;padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+  .gate-row{display:flex;align-items:center;gap:14px;font-size:13px;white-space:nowrap;min-width:600px}
+  .claim{background:var(--panel-2);border:1px solid var(--line-bright);border-radius:6px;padding:9px 14px;color:var(--ink-dim)}
+  .arrow{color:var(--wire);font-size:18px}
+  .checkpoint{border:1px dashed var(--wire);border-radius:6px;padding:9px 14px;color:var(--wire)}
+  .verdicts{display:flex;flex-direction:column;gap:6px}
+  .v{padding:5px 12px;border-radius:5px;font-size:12px;font-weight:600}
+  .v.pass{background:rgba(74,222,128,.12);color:var(--pass);border:1px solid rgba(74,222,128,.3)}
+  .v.warn{background:rgba(251,191,36,.12);color:var(--warn);border:1px solid rgba(251,191,36,.3)}
+  .v.stop{background:rgba(244,63,94,.12);color:var(--stop);border:1px solid rgba(244,63,94,.3)}
+
+  h1{font-size:clamp(40px,7vw,72px);font-weight:800;letter-spacing:-.04em;line-height:.95;margin-bottom:20px}
+  h1 .em{color:var(--pass)}
+  .lede{font-size:clamp(16px,2.2vw,20px);color:var(--ink-dim);max-width:660px;margin-bottom:14px}
+  .lede b{color:var(--ink)}
+  .one-liner{font-size:14px;color:var(--ink-faint);max-width:660px}
+
+  .meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-top:40px;border-radius:8px;overflow:hidden}
+  .meta div{background:var(--panel);padding:14px 16px}
+  .meta dt{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
+  .meta dd{font-size:13.5px;font-weight:600;color:var(--ink)}
+
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin-top:36px}
+  nav.toc a{font-size:12px;color:var(--ink-dim);border:1px solid var(--line);padding:7px 12px;border-radius:6px;background:var(--panel)}
+  nav.toc a:hover{border-color:var(--wire);color:var(--ink)}
+
+  /* sections */
+  section{padding:56px 0;border-bottom:1px solid var(--line)}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:14px}
+  .sec-no{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--void);background:var(--ink-dim);padding:3px 8px;border-radius:4px}
+  h2{font-size:clamp(22px,3.6vw,30px);font-weight:800;letter-spacing:-.02em}
+  .sec-sub{color:var(--ink-faint);font-size:14px;margin-bottom:30px;max-width:740px}
+  h3{font-size:17px;font-weight:700;margin:30px 0 12px;color:var(--ink)}
+  h3 .mk{color:var(--pass);margin-right:8px}
+  p{font-size:14.5px;color:var(--ink-dim);margin-bottom:14px}
+  p b,strong{color:var(--ink);font-weight:700}
+  .lead-p{font-size:16px;color:var(--ink)}
+
+  ul,ol{margin:0 0 16px;padding-left:0;list-style:none}
+  li{position:relative;padding-left:24px;margin-bottom:10px;font-size:14.5px;color:var(--ink-dim)}
+  li::before{content:"›";position:absolute;left:7px;color:var(--wire);font-weight:700}
+  ol{counter-reset:o}
+  ol li::before{counter-increment:o;content:counter(o);font-size:11px;color:var(--ink-faint);left:4px;top:2px}
+  li b{color:var(--ink)}
+
+  code.in{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:2px 6px;font-size:13px;color:var(--pass)}
+
+  pre{background:#0a0c11;border:1px solid var(--line);border-radius:8px;padding:20px;overflow-x:auto;font-size:12.5px;line-height:1.6;margin:16px 0}
+  pre .c{color:var(--ink-faint)}
+  pre .k{color:#c792ea}
+  pre .s{color:var(--pass)}
+  pre .f{color:var(--wire)}
+  pre .n{color:var(--warn)}
+
+  /* tables */
+  .tbl{width:100%;border-collapse:collapse;margin:18px 0;font-size:13px}
+  .tbl th{text-align:left;background:var(--panel-2);color:var(--ink);padding:11px 13px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--line-bright)}
+  .tbl td{padding:11px 13px;border-bottom:1px solid var(--line);color:var(--ink-dim);vertical-align:top}
+  .tbl tr:last-child td{border-bottom:none}
+  .pass-t{color:var(--pass);font-weight:700}
+  .warn-t{color:var(--warn);font-weight:700}
+  .stop-t{color:var(--stop);font-weight:700}
+
+  .callout{border-left:3px solid var(--wire);background:var(--panel);padding:16px 20px;border-radius:0 8px 8px 0;margin:20px 0}
+  .callout.warn{border-left-color:var(--warn)}
+  .callout.stop{border-left-color:var(--stop)}
+  .callout .ct{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;margin-bottom:8px;color:var(--wire)}
+  .callout.warn .ct{color:var(--warn)}
+  .callout.stop .ct{color:var(--stop)}
+  .callout p:last-child{margin-bottom:0}
+
+  /* rule cards */
+  .rule{border:1px solid var(--line);border-radius:10px;margin:16px 0;overflow:hidden;background:var(--panel)}
+  .rule-h{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--panel-2);border-bottom:1px solid var(--line)}
+  .rule-id{font-size:11px;font-weight:700;padding:3px 9px;border-radius:4px;background:var(--void);color:var(--ink-dim);border:1px solid var(--line-bright)}
+  .rule-h h4{font-size:15px;font-weight:700;color:var(--ink);flex:1}
+  .badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em}
+  .badge.mvp{background:rgba(74,222,128,.14);color:var(--pass);border:1px solid rgba(74,222,128,.3)}
+  .badge.next{background:rgba(91,141,239,.14);color:var(--wire);border:1px solid rgba(91,141,239,.3)}
+  .badge.later{background:var(--panel);color:var(--ink-faint);border:1px solid var(--line)}
+  .rule-b{padding:16px 18px}
+  .rule-b .meta-line{font-size:12px;color:var(--ink-faint);margin-bottom:10px}
+  .rule-b .meta-line span{color:var(--ink-dim)}
+
+  .flow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+  .flow .step{font-size:12px;padding:6px 11px;border-radius:5px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink-dim)}
+  .flow .op{color:var(--wire);align-self:center}
+
+  footer{padding:48px 0 90px;color:var(--ink-faint);font-size:13px}
+  footer .ft{font-size:15px;color:var(--ink);font-weight:700;margin-bottom:12px}
+  a{color:var(--wire);text-decoration:none}
+
+  @media (max-width:600px){
+    .wrap{padding:0 18px}
+    section{padding:40px 0}
+    .gate-row{min-width:540px}
+  }
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">설계 문서 · grounding enforcement guardrail · v0.1</div>
+
+    <div class="gate">
+      <div class="gate-row">
+        <span class="claim">AI의 주장 / 행동</span>
+        <span class="arrow">→</span>
+        <span class="checkpoint">근거 검문소 (PreToolUse)</span>
+        <span class="arrow">→</span>
+        <div class="verdicts">
+          <span class="v pass">grounded → 통과</span>
+          <span class="v warn">uncertain → 경고</span>
+          <span class="v stop">ungrounded → 차단</span>
+        </div>
+      </div>
+    </div>
+
+    <h1>grounded<span class="em">.</span></h1>
+    <p class="lede"><b>"확인했다"고 말하기 전에, 정말 확인하게 만든다.</b> AI 코딩 에이전트가 근거 없이 행동하려 할 때 결정론적으로 멈추는 가드레일.</p>
+    <p class="one-liner">파일을 읽지 않고 고치려 하거나, 존재를 확인하지 않은 패키지를 설치하려 하거나, 살아있는지 모르는 URL을 들이밀 때 — 그 행동이 실행되기 전에 검문한다. LLM 없이, 셸과 로컬 상태만으로.</p>
+
+    <dl class="meta">
+      <div><dt>형태</dt><dd>Claude Code hooks</dd></div>
+      <div><dt>카테고리</dt><dd>보안 아님 · 근거 강제</dd></div>
+      <div><dt>판정 엔진</dt><dd>결정론적 (no LLM)</dd></div>
+      <div><dt>상태 저장</dt><dd>세션 로컬 ledger</dd></div>
+      <div><dt>차단 수단</dt><dd>PreToolUse exit 2</dd></div>
+      <div><dt>설치</dt><dd>settings.json</dd></div>
+    </dl>
+
+    <nav class="toc">
+      <a href="#why">01 왜</a>
+      <a href="#category">02 카테고리</a>
+      <a href="#arch">03 아키텍처</a>
+      <a href="#rules">04 규칙 셋</a>
+      <a href="#verdict">05 판정 모델</a>
+      <a href="#ledger">06 세션 원장</a>
+      <a href="#blind">07 사각지대</a>
+      <a href="#mvp">08 MVP 범위</a>
+      <a href="#road">09 로드맵</a>
+      <a href="#risk">10 리스크</a>
+    </nav>
+  </div>
+</header>
+
+<!-- 01 why -->
+<section id="why">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">01</span><h2>왜 만드는가</h2></div>
+    <p class="sec-sub">AI 코딩 에이전트의 가장 비싼 실패는 "위험한 명령"이 아니라 "확인하지 않은 것을 확인한 척하는 것"이다.</p>
+
+    <p class="lead-p">에이전트는 종종 파일을 읽지 않고 내용을 추측해 수정하고, 존재하지 않는 패키지를 설치하려 하고, 죽은 링크를 "검색해보니 있다"며 제시한다. 각각은 작아 보이지만, <b>잘못된 전제 위에 다음 행동이 쌓이면서 사람이 그것을 일일이 되짚어 검증해야 하는 피로</b>가 쌓인다. 그 피로가 진짜 비용이다.</p>
+
+    <div class="callout">
+      <div class="ct">핵심 통찰</div>
+      <p>CLAUDE.md에 "추측하지 마라"라고 적는 것은 LLM이 런타임에 해석하는 <b>제안</b>이다. 설득당할 수 있다. 반면 hook은 모델이 무슨 생각을 하든 무조건 실행되는 <b>강제</b>다. 근거 없는 행동을 막으려면 제안이 아니라 강제가 필요하다.</p>
+    </div>
+
+    <p>grounded는 "더 똑똑한 모델"로 이 문제를 풀지 않는다. <b>행동 직전에 결정론적으로 근거를 요구</b>한다. 파일을 고치려면 먼저 읽었어야 하고, 패키지를 깔려면 먼저 존재를 확인했어야 한다. 근거가 세션 기록에 없으면, 그 행동은 통과하지 못한다.</p>
+  </div>
+</section>
+
+<!-- 02 category -->
+<section id="category">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">02</span><h2>이미 있는 것과 무엇이 다른가</h2></div>
+    <p class="sec-sub">PreToolUse 가드레일 자체는 흔하다. 그러나 전부 "보안"이다. grounded는 다른 축에 선다.</p>
+
+    <table class="tbl">
+      <thead><tr><th>축</th><th>기존 가드레일 (다수)</th><th>grounded</th></tr></thead>
+      <tbody>
+        <tr><td>막는 대상</td><td><span class="stop-t">위험한 행동</span> (rm -rf, force push, .env 유출, 시크릿)</td><td><span class="pass-t">근거 없는 행동</span> (안 읽고 수정, 미확인 설치, 죽은 링크)</td></tr>
+        <tr><td>질문</td><td>"이 명령이 위험한가?"</td><td>"이 행동에 근거가 있는가?"</td></tr>
+        <tr><td>판단 기준</td><td>명령어 패턴 (정적 정규식)</td><td>세션 행동 이력 (동적 상태)</td></tr>
+        <tr><td>상태</td><td>대체로 무상태 (패턴만 보면 됨)</td><td>상태 필수 (무엇을 읽었나 기억해야 함)</td></tr>
+        <tr><td>시장</td><td>레드오션 (다수 경쟁)</td><td>빈 칸</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="ct">포지셔닝 규칙</div>
+      <p>"종합 보안 가드레일"로 포지셔닝하면 기존 강자들과 정면 충돌한다. grounded는 반드시 <b>"AI가 추측을 사실처럼 말하는 것을 막는다"</b>는 별도 카테고리로 선을 긋는다. 보안 도구와 함께 쓰는 보완재이지, 대체재가 아니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 03 architecture -->
+<section id="arch">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">03</span><h2>아키텍처</h2></div>
+    <p class="sec-sub">hook은 호출마다 독립 프로세스로 떠서 상태가 없다. 그래서 외부 원장(ledger)이 코어가 된다.</p>
+
+    <p>두 개의 hook이 하나의 로컬 상태 파일을 공유한다. <b>PostToolUse가 적립하고, PreToolUse가 검문한다.</b></p>
+
+    <pre><span class="c">  ┌─────────────────────── 세션 동안 누적 ───────────────────────┐</span>
+
+  도구 실행됨 (Read/Grep/web_fetch/검증성공)
+        │
+        ▼
+  <span class="f">PostToolUse hook</span> ──적립──▶  <span class="s">.grounded/ledger.json</span>
+        │                          { read_files: [...],
+   (관찰·기록 전용)                  verified_urls: [...],
+                                    known_pkgs: [...] }
+                                          │
+  ─────────────────────────────────────── │ ───────────────
+                                          │ 조회
+  AI가 행동 시도 (Edit/Write/install/fetch)│
+        │                                 ▼
+        ▼                          <span class="f">PreToolUse hook</span>
+  tool_input 가로챔 ───────────▶  원장에 근거 있나?
+                                    │
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+              <span class="s">근거 있음</span>        <span class="n">불확실</span>          <span class="c">근거 없음</span>
+              exit 0           exit 0 +        <span class="c">exit 2</span>
+              (통과)           경고 주입        (차단·피드백)</pre>
+
+    <h3><span class="mk">#</span>구성 요소</h3>
+    <table class="tbl">
+      <thead><tr><th>요소</th><th>역할</th><th>비고</th></tr></thead>
+      <tbody>
+        <tr><td><code class="in">ledger.json</code></td><td>이번 세션에서 확인된 사실 누적 (읽은 파일, 검증된 URL, 확인된 패키지)</td><td>SessionStart에서 초기화</td></tr>
+        <tr><td><code class="in">post-record</code></td><td>PostToolUse — 도구 결과에서 "무엇이 확인됐나" 추출해 원장에 적립</td><td>관찰 전용, 차단 안 함</td></tr>
+        <tr><td><code class="in">pre-gate</code></td><td>PreToolUse — 행동의 대상이 원장에 근거가 있는지 대조 후 판정</td><td>exit 2로 차단 가능</td></tr>
+        <tr><td><code class="in">verdict</code></td><td>pass / warn / stop 결정 로직 (순수 함수, LLM 없음)</td><td>규칙별로 다름</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <div class="ct">검증된 기술 제약</div>
+      <p>① hook은 매번 독립 프로세스 → 상태는 반드시 파일/데몬으로. ② PreToolUse는 <code class="in">exit 2</code>로 차단 + stderr가 모델에 피드백된다. ③ 단, 버전·배포 방식에 따라 차단이 무시된 버그 이력이 있다(플러그인 command hook, 일부 macOS 버전). <b>그래서 플러그인 패키징보다 settings.json 직접 등록으로 시작하고, 첫 줄 테스트로 exit 2가 실제로 막는지부터 확인한다.</b></p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 rules -->
+<section id="rules">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">04</span><h2>규칙 셋</h2></div>
+    <p class="sec-sub">세 가지 근거 규칙. 결정론·오탐·사각지대 기준으로 우선순위가 다르다. 단단한 것부터 출시한다.</p>
+
+    <div class="rule">
+      <div class="rule-h"><span class="rule-id">G-1</span><h4>읽기 선행 — 안 읽은 파일은 수정 못 한다</h4><span class="badge mvp">MVP</span></div>
+      <div class="rule-b">
+        <div class="meta-line">대상: <span>Edit / Write</span> · 근거원: <span>이번 세션의 Read / Grep / cat</span> · 오탐: <span>매우 낮음</span></div>
+        <div class="flow">
+          <span class="step">Edit(foo.py) 시도</span><span class="op">→</span>
+          <span class="step">원장에 foo.py 읽은 기록?</span><span class="op">→</span>
+          <span class="step">없음 → 차단</span>
+        </div>
+        <p>가장 단단한 규칙. 대상이 <b>로컬 파일 경로</b>라 네트워크·오탐이 없고, Edit/Write는 무조건 도구를 거치므로 <b>사각지대도 없다.</b> "내용을 추측해서 고치는" 가장 흔한 실패를 정확히 막는다.</p>
+        <div class="callout stop" style="margin-bottom:0">
+          <div class="ct">차단 메시지 예</div>
+          <p style="color:var(--ink-dim)">"foo.py를 이번 세션에 읽은 기록이 없습니다. 추측으로 수정하지 말고 먼저 파일을 읽으세요."</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="rule">
+      <div class="rule-h"><span class="rule-id">G-2</span><h4>존재 확인 — 미확인 패키지는 설치 못 한다</h4><span class="badge next">NEXT</span></div>
+      <div class="rule-b">
+        <div class="meta-line">대상: <span>Bash (npm/pip/cargo install)</span> · 근거원: <span>레지스트리 존재 확인</span> · 오탐: <span>낮음</span></div>
+        <div class="flow">
+          <span class="step">pip install foopkg</span><span class="op">→</span>
+          <span class="step">PyPI에 foopkg 존재?</span><span class="op">→</span>
+          <span class="step">없음 → 차단</span>
+        </div>
+        <p>"환각 패키지 설치"를 막는다 — 존재하지 않는 이름을 지어내 설치하려는 흔한 실패. 레지스트리 메타데이터 조회(HEAD/JSON)는 일반 웹페이지보다 안정적이라 봇 차단 오탐이 적다. 결과는 원장에 캐싱한다.</p>
+      </div>
+    </div>
+
+    <div class="rule">
+      <div class="rule-h"><span class="rule-id">G-3</span><h4>링크 실존 — 핑 안 때린 URL은 경고한다</h4><span class="badge later">LATER</span></div>
+      <div class="rule-b">
+        <div class="meta-line">대상: <span>web_fetch / Bash(curl)</span> · 근거원: <span>HTTP 상태</span> · 오탐: <span>높음 → soft block</span></div>
+        <div class="flow">
+          <span class="step">fetch(url)</span><span class="op">→</span>
+          <span class="step">404/DNS실패</span><span class="op">→</span>
+          <span class="step">차단</span>
+          <span class="step" style="margin-left:8px">403/타임아웃</span><span class="op">→</span>
+          <span class="step">경고만</span>
+        </div>
+        <p>가장 까다로운 규칙이라 마지막. 죽은 링크(404·DNS 실패)는 명백한 환각이니 차단하되, <b>403·5xx·타임아웃은 봇 차단일 수 있어 차단하지 않고 경고만</b> 던진다. 오탐으로 작업을 끊는 것보다 1%의 통과가 낫다.</p>
+        <div class="callout warn" style="margin-bottom:0">
+          <div class="ct">사각지대 주의</div>
+          <p style="color:var(--ink-dim)">AI가 도구 없이 일반 텍스트로 링크를 뱉으면 hook을 타지 않는다. 이건 hook만으로 못 막는다 → 09 로드맵의 프롬프트 룰로 보완.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 verdict -->
+<section id="verdict">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">05</span><h2>판정 모델 — pass / warn / stop</h2></div>
+    <p class="sec-sub">모든 규칙은 세 결과 중 하나로 수렴한다. retention을 지키는 핵심은 "언제 stop이 아니라 warn인가"이다.</p>
+
+    <table class="tbl">
+      <thead><tr><th>판정</th><th>언제</th><th>동작</th><th>사용자 체감</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pass-t">PASS</span></td><td>근거가 원장에 있음</td><td><code class="in">exit 0</code> 조용히 통과</td><td>아무 방해 없음</td></tr>
+        <tr><td><span class="warn-t">WARN</span></td><td>근거 불확실 (403, 타임아웃, 모호)</td><td><code class="in">exit 0</code> + 모델에 경고 주입</td><td>흐름 안 끊김, 모델이 스스로 재확인</td></tr>
+        <tr><td><span class="stop-t">STOP</span></td><td>근거 명백히 없음 (안 읽음, 404, 미존재)</td><td><code class="in">exit 2</code> 차단 + 이유 피드백</td><td>막힘 — 단, 이유와 해법 제시</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="ct">설계 철학 — 오탐 < 누락</div>
+      <p>개발자 도구는 "내 시간을 아껴주는가"로 살고 죽는다. 멀쩡한 작업을 잘못 막으면(false positive) 사용자는 10분 만에 끈다. 그래서 <b>확신이 없으면 STOP이 아니라 WARN</b>이다. 1%의 환각을 통과시키더라도, 오탐으로 흐름을 끊지 않는 쪽을 택한다. 차단은 "근거가 명백히 없을 때"로만 좁힌다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 06 ledger -->
+<section id="ledger">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">06</span><h2>세션 원장</h2></div>
+    <p class="sec-sub">hook이 무상태이므로, "이번 세션에서 무엇이 확인됐나"를 담는 단일 진실 공급원.</p>
+
+    <pre><span class="c">// .grounded/ledger.json — SessionStart에서 {} 로 초기화</span>
+{
+  <span class="f">"read_files"</span>: {
+    <span class="s">"src/auth.py"</span>: <span class="n">1718000000</span>,   <span class="c">// 읽은 시각 (이후 외부 수정 감지용)</span>
+    <span class="s">"README.md"</span>:   <span class="n">1718000042</span>
+  },
+  <span class="f">"verified_urls"</span>: {
+    <span class="s">"https://docs.x.com/api"</span>: <span class="n">200</span>,   <span class="c">// 캐싱: 재검증 안 함</span>
+    <span class="s">"https://dead.example/x"</span>:  <span class="n">404</span>
+  },
+  <span class="f">"known_pkgs"</span>: {
+    <span class="s">"requests"</span>: <span class="n">true</span>,
+    <span class="s">"reqests"</span>:  <span class="n">false</span>     <span class="c">// 오타/환각 패키지</span>
+  }
+}</pre>
+
+    <h3><span class="mk">#</span>적립 규칙 (PostToolUse)</h3>
+    <ul>
+      <li><b>Read / Grep / cat 성공</b> → 해당 파일 경로를 <code class="in">read_files</code>에 시각과 함께 적립</li>
+      <li><b>web_fetch / curl 성공</b> → 그 URL과 상태코드를 <code class="in">verified_urls</code>에 적립</li>
+      <li><b>패키지 조회 성공</b> → 패키지명을 <code class="in">known_pkgs</code>에 적립</li>
+    </ul>
+
+    <div class="callout">
+      <div class="ct">신선도(freshness) 처리</div>
+      <p>읽은 시각을 기록하는 이유: 파일을 읽은 뒤 다른 도구가 그 파일을 수정하면, 원장의 "읽음"은 낡은 것이 된다. G-1은 "수정 시점 기준으로 최신 읽기가 있는가"까지 볼 수 있다(2차 정밀화). MVP에서는 단순히 "읽은 적 있는가"로 시작한다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 07 blind spots -->
+<section id="blind">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">07</span><h2>사각지대 — 정직하게</h2></div>
+    <p class="sec-sub">hook으로 못 잡는 것을 README에 숨기지 않고 먼저 밝힌다. 이게 신뢰를 만든다.</p>
+
+    <div class="callout stop">
+      <div class="ct">사각지대 1 — 텍스트 응답</div>
+      <p>AI가 도구를 쓰지 않고 채팅 텍스트로 "이 링크 참고하세요: https://..." 라고 뱉으면 어떤 hook도 타지 않는다. <b>hook은 도구 호출만 가로챈다.</b> 이건 hook의 구조적 한계이며, 프롬프트 룰(09)로만 부분 완화된다.</p>
+    </div>
+
+    <div class="callout stop">
+      <div class="ct">사각지대 2 — 봇 차단 오탐</div>
+      <p>Cloudflare 등이 curl을 403으로 막으면 멀쩡한 링크를 죽은 것으로 오판할 수 있다. 그래서 G-3은 403을 차단하지 않고 경고로만 처리한다(05 판정 모델). 완벽한 URL 검증은 불가능하다는 것을 인정하고 설계에 반영한다.</p>
+    </div>
+
+    <div class="callout">
+      <div class="ct">그래서 — 무엇을 약속하고 무엇을 약속하지 않는가</div>
+      <p><b>약속한다:</b> 도구를 거치는 행동(수정·설치·fetch)에 대해 근거를 강제한다. <b>약속하지 않는다:</b> 모든 환각을 잡는 것. grounded는 "AI의 똥을 자동으로 다 치운다"가 아니라 "가장 흔하고 비싼 근거 없는 행동을 도구 경계에서 막는다"이다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 08 mvp -->
+<section id="mvp">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">08</span><h2>MVP 범위</h2></div>
+    <p class="sec-sub">전부 만들지 않는다. 가장 단단한 규칙 하나로 시장 반응을 싸게 확인한다.</p>
+
+    <h3><span class="mk">#</span>v0.1 — G-1 단일 규칙</h3>
+    <ol>
+      <li><b>exit 2 작동 확인</b> — 1줄 hook으로 "내 환경에서 PreToolUse가 진짜 도구를 막는가" 먼저 검증. 안 되면 HTTP hook 방식으로 전환.</li>
+      <li><b>ledger 초기화</b> — SessionStart hook이 <code class="in">.grounded/ledger.json</code>을 <code class="in">{}</code>로 생성</li>
+      <li><b>적립</b> — PostToolUse가 Read/Grep 성공 시 파일 경로 기록</li>
+      <li><b>검문</b> — PreToolUse가 Edit/Write 대상이 원장에 있나 대조, 없으면 exit 2 + 메시지</li>
+      <li><b>settings.json 등록</b> — 플러그인 패키징 없이 직접 등록 (command hook 버그 회피)</li>
+    </ol>
+
+    <div class="callout">
+      <div class="ct">왜 G-1부터인가</div>
+      <p>G-1은 <b>오탐 0에 가깝고</b>(로컬 파일), <b>사각지대 0</b>(Edit는 무조건 도구), <b>네트워크 의존 0</b>(지연·봇차단 없음). 즉 세 규칙 중 유일하게 "조용히 정확하게" 작동한다. 첫인상이 오탐으로 망가지지 않는다.</p>
+    </div>
+
+    <h3><span class="mk">#</span>의도적으로 뺀 것</h3>
+    <ul>
+      <li>G-2/G-3 — v0.1 반응 본 뒤 추가</li>
+      <li>LLM 기반 문장 단위 사실 검증 — 지연·비용·오탐으로 "아름다운 쓰레기"가 됨. 영구 제외.</li>
+      <li>대시보드·통계 — 기존 보안 가드레일의 영역. 근거 강제에 집중.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 09 roadmap -->
+<section id="road">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">09</span><h2>로드맵</h2></div>
+    <p class="sec-sub">단단한 것 → 유용한 것 → 완전한 것. 각 단계 끝에 사람이 체감하는 결과가 있다.</p>
+
+    <table class="tbl">
+      <thead><tr><th>단계</th><th>내용</th><th>해결하는 실패</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pass-t">v0.1</span></td><td>G-1 읽기 선행 강제 + ledger + settings.json</td><td>안 읽고 추측으로 파일 수정</td></tr>
+        <tr><td><span class="warn-t">v0.2</span></td><td>G-2 패키지 존재 검증 + 캐싱</td><td>환각 패키지 설치</td></tr>
+        <tr><td>v0.3</td><td>G-3 URL 실존 (404 차단 / 403 경고)</td><td>죽은 링크 제시</td></tr>
+        <tr><td>v0.4</td><td>프롬프트 룰 동봉 — "링크 제안 전 도구로 확인하라"를 CLAUDE.md 템플릿으로</td><td>텍스트 사각지대 부분 완화</td></tr>
+        <tr><td>v0.5</td><td>freshness — 읽은 뒤 외부 수정 감지, 설정 가능한 규칙 on/off</td><td>낡은 근거로 수정</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="ct">출시 메시지</div>
+      <p>"또 하나의 보안 가드레일"이 아니라 <b>"AI가 확인 안 한 걸 확인한 척하는 걸 막는다"</b>로 소개한다. 데모는 — 에이전트가 안 읽은 파일을 고치려다 grounded에 막히고, 파일을 읽은 뒤 통과하는 30초 GIF. 한 장면이 카피 100줄보다 강하다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 10 risk -->
+<section id="risk">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">10</span><h2>리스크 &amp; 대응</h2></div>
+    <table class="tbl">
+      <thead><tr><th>리스크</th><th>영향</th><th>대응</th></tr></thead>
+      <tbody>
+        <tr><td>exit 2 차단이 환경에 따라 무시됨</td><td>가드레일 무력화</td><td>설치 시 1줄 self-test로 차단 작동 검증, 안 되면 HTTP hook 전환</td></tr>
+        <tr><td>오탐으로 작업 흐름 끊김</td><td>사용자 이탈 (retention 0)</td><td>확신 없으면 WARN, STOP은 명백한 경우로만. G-1부터 시작(오탐 최소)</td></tr>
+        <tr><td>텍스트 사각지대</td><td>일부 환각 못 잡음</td><td>한계를 README 1면에 명시, 프롬프트 룰로 부분 완화. 과대약속 금지</td></tr>
+        <tr><td>hook 지연 누적</td><td>에이전트 반응 느려짐</td><td>로컬 대조는 ms 단위. 네트워크(G-2/3)는 타임아웃 후 통과. 검증 결과 캐싱</td></tr>
+        <tr><td>기존 보안 가드레일과 혼동</td><td>차별성 소멸</td><td>"보안 아님 · 근거 강제" 카테고리를 일관되게 유지</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="ct">가장 큰 구조적 강점</div>
+      <p>이 도구의 저자는 <b>실제 사용자</b>다. 이 설계는 "AI가 추측을 사실처럼 말해서 사람이 검증하느라 고생한" 실제 경험에서 나왔다. 시장 조사로 만든 기능이 아니라, 직접 겪은 고통을 푸는 도구라는 점이 진정성의 근거다.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="ft">grounded — grounding enforcement for AI coding agents</div>
+    <p>v0.1 초안. 구현 시작 전 exit 2 self-test부터. 각 단계 종료 시 동작하는 결과와 실제 오탐률로 갱신한다.</p>
+    <p style="margin-top:12px">참조 · <a href="https://code.claude.com/docs/en/hooks">Claude Code Hooks 문서</a> · PreToolUse / PostToolUse / SessionStart</p>
+  </div>
+</footer>
+
+</body>
+</html>
