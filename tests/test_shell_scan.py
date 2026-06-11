@@ -88,5 +88,70 @@ class WriteTargetsTest(unittest.TestCase):
                          [("f.txt", shell_scan.TRUNCATE)])
 
 
+class PackageSpecsTest(unittest.TestCase):
+    def specs(self, command):
+        return shell_scan.package_specs(command)
+
+    def test_pip_install_basic(self):
+        self.assertEqual(self.specs("pip install requests"), [("pypi", "requests")])
+
+    def test_pip3_and_version_specifier(self):
+        self.assertEqual(self.specs("pip3 install requests==2.31.0"), [("pypi", "requests")])
+
+    def test_pip_extras_and_range(self):
+        self.assertEqual(self.specs("pip install 'uvicorn[standard]>=0.29'"), [("pypi", "uvicorn")])
+
+    def test_pip_requirements_file_skipped(self):
+        self.assertEqual(self.specs("pip install -r requirements.txt"), [])
+
+    def test_pip_local_and_url_skipped(self):
+        self.assertEqual(self.specs("pip install ."), [])
+        self.assertEqual(self.specs("pip install git+https://github.com/x/y"), [])
+        self.assertEqual(self.specs("pip install ./pkg"), [])
+
+    def test_python_dash_m_pip(self):
+        self.assertEqual(self.specs("python3 -m pip install flask"), [("pypi", "flask")])
+
+    def test_uv_add_and_uv_pip(self):
+        self.assertEqual(self.specs("uv add httpx"), [("pypi", "httpx")])
+        self.assertEqual(self.specs("uv pip install httpx"), [("pypi", "httpx")])
+
+    def test_npm_install_with_version(self):
+        self.assertEqual(self.specs("npm install lodash@4.17.21"), [("npm", "lodash")])
+
+    def test_npm_scoped_package(self):
+        self.assertEqual(self.specs("npm i @types/node@20"), [("npm", "@types/node")])
+
+    def test_npm_flags_skipped(self):
+        self.assertEqual(self.specs("npm install --save-dev typescript"), [("npm", "typescript")])
+
+    def test_npm_bare_install_is_empty(self):
+        self.assertEqual(self.specs("npm install"), [])
+
+    def test_yarn_and_pnpm(self):
+        self.assertEqual(self.specs("yarn add react"), [("npm", "react")])
+        self.assertEqual(self.specs("pnpm add vue"), [("npm", "vue")])
+
+    def test_cargo_add_and_install(self):
+        self.assertEqual(self.specs("cargo add serde@1"), [("crates", "serde")])
+        self.assertEqual(self.specs("cargo install ripgrep"), [("crates", "ripgrep")])
+
+    def test_sudo_and_env_prefix(self):
+        self.assertEqual(self.specs("sudo pip install requests"), [("pypi", "requests")])
+        self.assertEqual(self.specs("PIP_NO_CACHE=1 pip install requests"), [("pypi", "requests")])
+
+    def test_multiple_packages_and_segments(self):
+        self.assertEqual(
+            self.specs("pip install flask requests && npm install lodash"),
+            [("pypi", "flask"), ("pypi", "requests"), ("npm", "lodash")],
+        )
+
+    def test_dedup(self):
+        self.assertEqual(self.specs("pip install x; pip install x"), [("pypi", "x")])
+
+    def test_non_install_commands_empty(self):
+        self.assertEqual(self.specs("pip freeze && npm run build && cargo test"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

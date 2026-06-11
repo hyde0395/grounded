@@ -128,3 +128,102 @@ def write_targets(command):
             seen.add(item)
             result.append(item)
     return result
+
+
+_PIP_VALUE_FLAGS = {
+    "-r", "-c", "-t", "-i", "-f", "--requirement", "--constraint", "--target",
+    "--index-url", "--extra-index-url", "--find-links", "--platform",
+    "--python-version", "--abi", "--implementation", "-e", "--editable",
+}
+_NON_REGISTRY_PREFIXES = ("file:", "git+", "http:", "https:", "github:", ".", "/", "~")
+
+
+def _pip_names(args):
+    names, skip_next = [], False
+    for a in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if a in _PIP_VALUE_FLAGS:
+            skip_next = True
+            continue
+        if not a or a.startswith("-"):
+            continue
+        if a.startswith(_NON_REGISTRY_PREFIXES):
+            continue
+        base = re.split(r"[\[<>=!~;,]", a)[0].strip()
+        if base:
+            names.append(base)
+    return names
+
+
+def _npm_names(args):
+    names = []
+    for a in args:
+        if not a or a.startswith("-"):
+            continue
+        if a.startswith(_NON_REGISTRY_PREFIXES):
+            continue
+        if a.startswith("@"):
+            if "/" not in a:
+                continue
+            cut = a.find("@", 1)  # version suffix on a scoped name
+            names.append(a if cut == -1 else a[:cut])
+        elif "/" not in a:
+            names.append(a.split("@", 1)[0])
+    return [n for n in names if n]
+
+
+def _cargo_names(args):
+    names = []
+    for a in args:
+        if not a or a.startswith("-") or "/" in a or a.startswith("."):
+            continue
+        names.append(a.split("@", 1)[0])
+    return [n for n in names if n]
+
+
+def _strip_prefixes(tokens):
+    """Drop leading VAR=val assignments and sudo."""
+    while tokens and "=" in tokens[0] and not tokens[0].startswith("-"):
+        tokens = tokens[1:]
+    if tokens and os.path.basename(tokens[0]) == "sudo":
+        tokens = tokens[1:]
+    return tokens
+
+
+def _segment_package_specs(tokens):
+    tokens = _strip_prefixes(tokens)
+    if not tokens:
+        return []
+    cmd, rest = os.path.basename(tokens[0]), tokens[1:]
+    if cmd in ("npm", "pnpm") and rest and rest[0] in ("install", "i", "add"):
+        return [("npm", n) for n in _npm_names(rest[1:])]
+    if cmd == "yarn" and rest and rest[0] == "add":
+        return [("npm", n) for n in _npm_names(rest[1:])]
+    if cmd in ("pip", "pip2", "pip3") and rest and rest[0] == "install":
+        return [("pypi", n) for n in _pip_names(rest[1:])]
+    if cmd in ("python", "python2", "python3") and len(rest) >= 3 \
+            and rest[0] == "-m" and rest[1] == "pip" and rest[2] == "install":
+        return [("pypi", n) for n in _pip_names(rest[3:])]
+    if cmd == "uv" and rest:
+        if rest[0] == "add":
+            return [("pypi", n) for n in _pip_names(rest[1:])]
+        if len(rest) >= 2 and rest[0] == "pip" and rest[1] == "install":
+            return [("pypi", n) for n in _pip_names(rest[2:])]
+    if cmd == "cargo" and rest and rest[0] in ("add", "install"):
+        return [("crates", n) for n in _cargo_names(rest[1:])]
+    return []
+
+
+def package_specs(command):
+    """[(ecosystem, name)] this command installs, order-preserving dedup."""
+    found = []
+    for segment in _split_segments(command):
+        found.extend(_segment_package_specs(_tokens(segment)))
+    seen, result = set(), []
+    for item in found:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
