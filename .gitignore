@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Local-only project context (not part of the distributed plugin)
+CLAUDE.md
+.claude/scheduled_tasks.lock
