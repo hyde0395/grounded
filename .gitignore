@@ -5,4 +5,5 @@ __pycache__/
 
 # Local-only project context (not part of the distributed plugin)
 CLAUDE.md
+SUBMISSION-*.md
 .claude/scheduled_tasks.lock
