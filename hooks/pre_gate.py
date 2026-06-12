@@ -139,11 +139,12 @@ def gate_file_tool(payload):
     if not raw:
         return 0
     cwd = payload.get("cwd") or "."
-    cfg = ledger_io.load_config(cwd)
+    root = ledger_io.resolve_root(cwd)
+    cfg = ledger_io.load_config(root)
     if not (cfg["g-1"] or cfg["freshness"]):
         return 0
     path = ledger_io.normalize(raw, cwd)
-    ledger = ledger_io.load_ledger(cwd)
+    ledger = ledger_io.load_ledger(root)
     if ledger is None:
         return 0  # corrupt ledger: fail open rather than false-block
     m = _mtime(path) if cfg["freshness"] else None
@@ -157,7 +158,7 @@ def gate_file_tool(payload):
     if v.decision == verdict.WARN:
         warns = _claim_warns(ledger, [(_warn_key(v.reason, path, m), v.reason)])
         if warns:
-            _save_caches(cwd, ledger)
+            _save_caches(root, ledger)
     return _emit([], warns)
 
 
@@ -166,8 +167,9 @@ def gate_bash(payload):
     if not command:
         return 0
     cwd = payload.get("cwd") or "."
-    cfg = ledger_io.load_config(cwd)
-    ledger = ledger_io.load_ledger(cwd)
+    root = ledger_io.resolve_root(cwd)
+    cfg = ledger_io.load_config(root)
+    ledger = ledger_io.load_ledger(root)
     if ledger is None:
         return 0  # corrupt ledger: fail open rather than false-block
     stops, warn_pairs, dirty = [], [], False
@@ -222,7 +224,7 @@ def gate_bash(payload):
         warns = _claim_warns(ledger, warn_pairs)
         dirty = dirty or bool(warns)
     if dirty:
-        _save_caches(cwd, ledger)
+        _save_caches(root, ledger)
     return _emit(stops, warns)
 
 
@@ -240,10 +242,10 @@ def gate_webfetch(payload):
     url = (payload.get("tool_input") or {}).get("url") or ""
     if not url:
         return 0
-    cwd = payload.get("cwd") or "."
-    if not ledger_io.load_config(cwd)["g-3"]:
+    root = ledger_io.resolve_root(payload.get("cwd") or ".")
+    if not ledger_io.load_config(root)["g-3"]:
         return 0
-    ledger = ledger_io.load_ledger(cwd)
+    ledger = ledger_io.load_ledger(root)
     if ledger is None:
         return 0  # corrupt ledger: fail open rather than false-block
     stops, warn_pairs, dirty = _gate_urls([url], ledger, _Budget())
@@ -252,7 +254,7 @@ def gate_webfetch(payload):
         warns = _claim_warns(ledger, warn_pairs)
         dirty = dirty or bool(warns)
     if dirty:
-        _save_caches(cwd, ledger)
+        _save_caches(root, ledger)
     return _emit(stops, warns)
 
 

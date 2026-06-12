@@ -27,14 +27,14 @@ def main():
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, UnicodeDecodeError):
         return 0
-    cwd = payload.get("cwd") or "."
+    root = ledger_io.resolve_root(payload.get("cwd") or ".")
     source = payload.get("source") or "startup"
     ledger = None
     if source in ("resume", "compact"):
-        ledger = ledger_io.load_ledger(cwd)  # None if corrupt
+        ledger = ledger_io.load_ledger(root)  # None if corrupt
     if ledger is None:
         ledger = ledger_io.default_ledger()
-    ledger_io.save_ledger(cwd, ledger)
+    ledger_io.save_ledger(root, ledger)
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "SessionStart",
         "additionalContext": PROMPT_RULE,

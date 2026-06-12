@@ -95,7 +95,8 @@ def main():
     cwd = payload.get("cwd") or "."
     tool_name = payload.get("tool_name") or ""
     tool_input = payload.get("tool_input") or {}
-    cfg = ledger_io.load_config(cwd)
+    root = ledger_io.resolve_root(cwd)
+    cfg = ledger_io.load_config(root)
     paths = extract_paths(tool_name, tool_input, payload.get("tool_response"),
                           cwd, grep_evidence=cfg["grep-evidence"])
     url = tool_input.get("url") if tool_name == "WebFetch" else None
@@ -110,7 +111,7 @@ def main():
             # PostToolUse only fires on success, so the fetch went through
             ledger["verified_urls"][urlcheck.normalize_url(url)] = 200
 
-    ledger_io.update_ledger(cwd, record)
+    ledger_io.update_ledger(root, record)
     return 0
 
 

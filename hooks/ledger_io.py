@@ -32,6 +32,29 @@ def _canon(name):
     return str(name).strip().lower().replace("_", "-")
 
 
+def resolve_root(cwd, env=None):
+    """Directory that owns .grounded/ — NOT necessarily the payload cwd.
+
+    The hook payload's cwd follows shell `cd`, so anchoring state to it
+    would orphan the ledger the moment the session changes directory
+    (observed live: a subdir's empty ledger false-blocked a recorded file).
+    Preference: $CLAUDE_PROJECT_DIR if valid, else the nearest ancestor
+    (cwd included) that already has a .grounded dir, else cwd itself.
+    """
+    env = os.environ if env is None else env
+    project_dir = env.get("CLAUDE_PROJECT_DIR")
+    if project_dir and os.path.isdir(project_dir):
+        return project_dir
+    probe = os.path.realpath(cwd)
+    while True:
+        if os.path.isdir(os.path.join(probe, LEDGER_DIR)):
+            return probe
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            return cwd
+        probe = parent
+
+
 def load_config(cwd, env=None):
     """Enabled flag per rule from .grounded/config.json + GROUNDED_DISABLE.
 

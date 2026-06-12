@@ -9,7 +9,9 @@ HOOKS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hook
 
 def run_hook(script, payload, env=None):
     merged = dict(os.environ)
-    merged.pop("GROUNDED_DISABLE", None)  # isolate tests from the host shell
+    # isolate tests from the host shell / a hosting Claude Code session
+    merged.pop("GROUNDED_DISABLE", None)
+    merged.pop("CLAUDE_PROJECT_DIR", None)
     merged.update(env or {})
     return subprocess.run(
         [sys.executable, os.path.join(HOOKS_DIR, script)],
