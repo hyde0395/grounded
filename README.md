@@ -6,7 +6,7 @@
 
 No LLM in the loop. No network calls (for the core rule). Just hooks, a local ledger, and exit codes.
 
-![version](https://img.shields.io/badge/version-0.1.0-blue)
+![version](https://img.shields.io/badge/version-0.2.0-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![engine](https://img.shields.io/badge/judgment-deterministic%20%C2%B7%20no%20LLM-brightgreen)
 ![category](https://img.shields.io/badge/category-grounding%20enforcement-purple)
@@ -60,15 +60,24 @@ Every rule resolves to one of three verdicts — and the design philosophy is **
 | Rule | What it enforces | Status |
 |---|---|---|
 | **G-1** Read-before-edit | A file can't be edited unless it was read this session (Read, Grep, `cat`) | ✅ v0.1 |
-| **G-2** Verify-before-install | A package can't be installed unless it exists on the registry (npm/PyPI/crates) | 🔜 next |
+| **G-1s** Shell-write gating | `sed -i`, `perl -i`, `tee`, `>` on a never-read file → blocked; `>>` (append) → warning only | ✅ v0.2 |
+| **G-2** Verify-before-install | A package can't be installed unless it exists on its registry (npm / PyPI / crates.io) | ✅ v0.2 |
 | **G-3** Fetch-before-cite | Dead URLs (404/DNS) are blocked; ambiguous ones (403/timeout) only warn | 🗺️ planned |
 
-When G-1 blocks, the model receives:
+When a rule blocks, the model receives an actionable reason:
 
 ```
-[grounded G-1] No record of reading src/auth.py in this session.
-Do not edit from guesswork — read the file with the Read tool first, then retry.
+[grounded G-1] This command overwrites src/auth.py (truncate) but there is no
+record of reading it this session. Read the file first (Read tool or cat), then retry.
+
+[grounded G-2] Package 'reqests' was not found on PyPI. This usually means a
+hallucinated or misspelled package name. Search the registry for the correct
+name before installing.
 ```
+
+G-2 lookups are cached in the session ledger (positive *and* negative), use a
+2.5s timeout, and **never block on network trouble** — an unreachable registry
+is not evidence of hallucination. A cached re-check costs ~50ms.
 
 ## Install
 
@@ -87,7 +96,7 @@ Copy `hooks/` into your project and register in `.claude/settings.json`:
         "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/post_record.py\"" }] }
     ],
     "PreToolUse": [
-      { "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+      { "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
         "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/pre_gate.py\"" }] }
     ]
   }
@@ -112,18 +121,18 @@ We'd rather tell you up front than have you find out:
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests   # 29 tests, run hooks via real stdin/exit-code interface
+python3 -m unittest discover -s tests   # 91 tests, hooks exercised via real stdin/exit-code interface
 ```
 
-The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post_record.py`, `pre_gate.py`), pure decision logic (`verdict.py` — no I/O, no LLM), and state I/O (`ledger_io.py`).
+The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post_record.py`, `pre_gate.py`), pure logic (`verdict.py`, `shell_scan.py` — no I/O, no LLM), and side effects at the edges (`ledger_io.py`, `registry.py`). Registry calls take an injectable opener, so the whole suite runs offline.
 
 ## Roadmap
 
 | Version | Ships | Kills this failure |
 |---|---|---|
-| v0.1 | G-1 read-before-edit + session ledger | editing from a guess |
-| v0.2 | G-2 package-existence check + caching, **shell-write gating** (`sed -i`, `echo >`, `tee`), plugin packaging | hallucinated installs, Edit-tool bypasses |
-| v0.3 | G-3 URL liveness (block 404 / warn 403) | citing dead links |
+| v0.1 ✅ | G-1 read-before-edit + session ledger | editing from a guess |
+| v0.2 ✅ | G-2 package-existence check + caching, shell-write gating (`sed -i`, `echo >`, `tee`) | hallucinated installs, Edit-tool bypasses |
+| v0.3 | G-3 URL liveness (block 404 / warn 403), marketplace plugin packaging | citing dead links |
 | v0.4 | bundled prompt rule for plain-text claims | text blind spot (partial) |
 | v0.5 | freshness — detect external edits after read, per-rule on/off | acting on stale evidence |
 
