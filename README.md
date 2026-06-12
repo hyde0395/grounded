@@ -95,11 +95,11 @@ Copy `hooks/` into your project and register in `.claude/settings.json`:
       { "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/session_start.py\"" }] }
     ],
     "PostToolUse": [
-      { "matcher": "Read|Grep|Edit|Write|MultiEdit|NotebookEdit|Bash",
+      { "matcher": "Read|Grep|Edit|Write|MultiEdit|NotebookEdit|Bash|WebFetch",
         "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/post_record.py\"" }] }
     ],
     "PreToolUse": [
-      { "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+      { "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|WebFetch",
         "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/pre_gate.py\"" }] }
     ]
   }
@@ -110,7 +110,7 @@ Requires Python 3 (stdlib only — zero dependencies).
 
 ### As a plugin (coming)
 
-The repo is already plugin-shaped (`.claude-plugin/plugin.json` + `hooks/hooks.json`). Marketplace packaging lands with v0.2.
+The repo is already plugin-shaped (`.claude-plugin/plugin.json` + `hooks/hooks.json`). Marketplace packaging lands with v0.4.
 
 ## Honest limitations
 
