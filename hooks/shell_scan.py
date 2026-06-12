@@ -216,6 +216,37 @@ def _segment_package_specs(tokens):
     return []
 
 
+_DATA_FLAGS_PREFIXES = ("-X", "--request", "-d", "--data", "-F", "--form",
+                        "-T", "--upload-file", "--post-data", "--post-file",
+                        "--method", "--body-data", "--body-file")
+_URL = re.compile(r"^https?://", re.IGNORECASE)
+
+
+def _segment_fetch_urls(tokens):
+    tokens = _strip_prefixes(tokens)
+    if not tokens or os.path.basename(tokens[0]) not in ("curl", "wget"):
+        return []
+    rest = tokens[1:]
+    # -X POST / --data … means an API call, not a citation fetch; a HEAD
+    # probe against such an endpoint would be a false dead-signal.
+    if any(t.startswith(_DATA_FLAGS_PREFIXES) for t in rest):
+        return []
+    return [t for t in rest if _URL.match(t)]
+
+
+def fetch_urls(command):
+    """[url] this command fetches (GET-style curl/wget only), deduped."""
+    found = []
+    for segment in _split_segments(command):
+        found.extend(_segment_fetch_urls(_tokens(segment)))
+    seen, result = set(), []
+    for u in found:
+        if u not in seen:
+            seen.add(u)
+            result.append(u)
+    return result
+
+
 def package_specs(command):
     """[(ecosystem, name)] this command installs, order-preserving dedup."""
     found = []

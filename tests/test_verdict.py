@@ -52,6 +52,25 @@ class GateShellWriteTest(unittest.TestCase):
         self.assertEqual(v.decision, verdict.PASS)
 
 
+class GateUrlTest(unittest.TestCase):
+    def test_alive_statuses_pass(self):
+        for status in (200, 204, 301, 308):
+            v = verdict.gate_url("https://a.com", status)
+            self.assertEqual(v.decision, verdict.PASS, status)
+
+    def test_dead_statuses_stop(self):
+        for status in (404, 410, 0):
+            v = verdict.gate_url("https://a.com/dead", status)
+            self.assertEqual(v.decision, verdict.STOP, status)
+            self.assertIn("https://a.com/dead", v.reason)
+            self.assertIn("G-3", v.reason)
+
+    def test_ambiguous_statuses_warn(self):
+        for status in (401, 403, 429, 500, 503, None):
+            v = verdict.gate_url("https://a.com", status)
+            self.assertEqual(v.decision, verdict.WARN, status)
+
+
 class GatePackageTest(unittest.TestCase):
     def test_exists_is_pass(self):
         v = verdict.gate_package("pypi", "requests", exists=True)

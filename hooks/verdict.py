@@ -56,6 +56,33 @@ def gate_shell_write(path, mode, file_exists, read_files):
     )
 
 
+def gate_url(url, status):
+    """G-3: only an unambiguously dead URL (404/410/DNS) may block.
+
+    `status` is from urlcheck.check_url: HTTP int, 0 for DNS-dead, None for
+    unknown. Bot walls answer 403, flaky servers answer 5xx — those warn,
+    never block (spec §07).
+    """
+    if status is not None and 200 <= status < 400:
+        return Verdict(PASS, "URL verified alive")
+    if status in (404, 410, 0):
+        detail = "DNS resolution failed" if status == 0 else f"HTTP {status}"
+        return Verdict(
+            STOP,
+            f"[grounded G-3] {url} is dead ({detail}). Fetching or citing it "
+            "would build on a hallucinated source. Find a live URL (e.g. via "
+            "search) before retrying.",
+        )
+    detail = "no response (timeout or connection trouble)" if status is None \
+        else f"HTTP {status}"
+    return Verdict(
+        WARN,
+        f"[grounded G-3] Could not positively verify {url} ({detail} — "
+        "possibly bot protection or a transient error). Proceeding, but treat "
+        "the result with care and prefer a source you can verify.",
+    )
+
+
 def gate_package(ecosystem, name, exists):
     """G-2: a package may only be installed if the registry confirms it exists.
 

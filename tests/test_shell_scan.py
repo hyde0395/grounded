@@ -88,6 +88,43 @@ class WriteTargetsTest(unittest.TestCase):
                          [("f.txt", shell_scan.TRUNCATE)])
 
 
+class FetchUrlsTest(unittest.TestCase):
+    def urls(self, command):
+        return shell_scan.fetch_urls(command)
+
+    def test_curl_basic(self):
+        self.assertEqual(self.urls("curl https://a.com/docs"), ["https://a.com/docs"])
+
+    def test_curl_with_flags_and_output(self):
+        self.assertEqual(self.urls("curl -sL -o out.html https://a.com/x"),
+                         ["https://a.com/x"])
+
+    def test_multiple_urls(self):
+        self.assertEqual(self.urls("curl https://a.com https://b.com"),
+                         ["https://a.com", "https://b.com"])
+
+    def test_wget(self):
+        self.assertEqual(self.urls("wget https://a.com/f.tar.gz"),
+                         ["https://a.com/f.tar.gz"])
+
+    def test_curl_post_is_not_gated(self):
+        self.assertEqual(self.urls("curl -X POST https://api.a.com/v1"), [])
+        self.assertEqual(self.urls("curl -d 'x=1' https://api.a.com/v1"), [])
+        self.assertEqual(self.urls("curl --data-raw '{}' https://api.a.com"), [])
+        self.assertEqual(self.urls("curl -F f=@x.txt https://api.a.com"), [])
+
+    def test_wget_post_is_not_gated(self):
+        self.assertEqual(self.urls("wget --post-data 'x=1' https://a.com"), [])
+
+    def test_non_fetch_commands_empty(self):
+        self.assertEqual(self.urls("git clone https://github.com/x/y"), [])
+        self.assertEqual(self.urls("echo https://a.com"), [])
+
+    def test_segments_and_dedup(self):
+        self.assertEqual(self.urls("curl https://a.com && curl https://a.com"),
+                         ["https://a.com"])
+
+
 class PackageSpecsTest(unittest.TestCase):
     def specs(self, command):
         return shell_scan.package_specs(command)
