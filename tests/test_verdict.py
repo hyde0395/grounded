@@ -27,6 +27,50 @@ class GateFileActionTest(unittest.TestCase):
         self.assertEqual(v.decision, verdict.STOP)
 
 
+class FreshnessTest(unittest.TestCase):
+    """v0.5: a read goes stale when the file changes on disk afterwards."""
+
+    def test_edit_stale_file_is_warn(self):
+        v = verdict.gate_file_action("Edit", "/p/a.py", file_exists=True,
+                                     read_files={"/p/a.py": 100}, mtime=200)
+        self.assertEqual(v.decision, verdict.WARN)
+        self.assertIn("/p/a.py", v.reason)
+        self.assertIn("changed", v.reason)
+
+    def test_edit_fresh_file_is_pass(self):
+        v = verdict.gate_file_action("Edit", "/p/a.py", file_exists=True,
+                                     read_files={"/p/a.py": 100}, mtime=99.5)
+        self.assertEqual(v.decision, verdict.PASS)
+
+    def test_mtime_within_slack_is_pass(self):
+        # ledger timestamps are second-truncated; one second of slack
+        # absorbs that, so mtime == ts + slack must not warn
+        v = verdict.gate_file_action("Edit", "/p/a.py", file_exists=True,
+                                     read_files={"/p/a.py": 100}, mtime=101)
+        self.assertEqual(v.decision, verdict.PASS)
+
+    def test_unknown_mtime_is_pass(self):
+        v = verdict.gate_file_action("Edit", "/p/a.py", file_exists=True,
+                                     read_files={"/p/a.py": 100}, mtime=None)
+        self.assertEqual(v.decision, verdict.PASS)
+
+    def test_non_numeric_ledger_timestamp_fails_open(self):
+        v = verdict.gate_file_action("Edit", "/p/a.py", file_exists=True,
+                                     read_files={"/p/a.py": "garbage"}, mtime=200)
+        self.assertEqual(v.decision, verdict.PASS)
+
+    def test_shell_write_stale_file_is_warn(self):
+        v = verdict.gate_shell_write("/p/a.py", "truncate", file_exists=True,
+                                     read_files={"/p/a.py": 100}, mtime=200)
+        self.assertEqual(v.decision, verdict.WARN)
+        self.assertIn("changed", v.reason)
+
+    def test_shell_write_fresh_file_is_pass(self):
+        v = verdict.gate_shell_write("/p/a.py", "truncate", file_exists=True,
+                                     read_files={"/p/a.py": 100}, mtime=100)
+        self.assertEqual(v.decision, verdict.PASS)
+
+
 class GateShellWriteTest(unittest.TestCase):
     def test_truncate_unread_existing_is_stop(self):
         v = verdict.gate_shell_write("/p/a.py", "truncate", file_exists=True, read_files={})

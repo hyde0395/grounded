@@ -1,14 +1,17 @@
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 
-from hook_runner import run_hook
+from hook_runner import HOOKS_DIR, run_hook
 
 
-def payload(tool_name, tool_input, cwd):
+def payload(tool_name, tool_input, cwd, tool_response=None):
     return {"hook_event_name": "PostToolUse", "tool_name": tool_name,
-            "tool_input": tool_input, "tool_response": {}, "cwd": cwd}
+            "tool_input": tool_input, "tool_response": tool_response or {},
+            "cwd": cwd}
 
 
 class PostRecordTest(unittest.TestCase):
@@ -93,12 +96,83 @@ class PostRecordTest(unittest.TestCase):
         run_hook("post_record.py", payload("Bash", {"command": f"sed -i 's/a/b/' {p}"}, self.cwd))
         self.assertFalse(os.path.exists(self.ledger))
 
+    def test_bash_git_diff_output_grounds_diffed_files(self):
+        # seeing the full diff of a file is read evidence for it
+        p = self.touch("a.py")
+        stdout = ("diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n"
+                  "@@ -1 +1 @@\n-x\n+y\n")
+        run_hook("post_record.py", payload(
+            "Bash", {"command": "git diff"}, self.cwd,
+            tool_response={"stdout": stdout, "stderr": ""}))
+        self.assertIn(p, self.read_files())
+
+    def test_bash_git_show_records_post_image_path_on_rename(self):
+        p = self.touch("new.py")
+        stdout = "diff --git a/old.py b/new.py\n--- a/old.py\n+++ b/new.py\n"
+        run_hook("post_record.py", payload(
+            "Bash", {"command": "git show HEAD"}, self.cwd,
+            tool_response={"stdout": stdout, "stderr": ""}))
+        self.assertIn(p, self.read_files())
+
+    def test_diff_headers_from_non_git_command_not_grounded(self):
+        # cat-ing a patch file shows diff text but is not `git diff` output
+        self.touch("a.py")
+        stdout = "diff --git a/a.py b/a.py\n"
+        run_hook("post_record.py", payload(
+            "Bash", {"command": "cat fix.patch"}, self.cwd,
+            tool_response={"stdout": stdout, "stderr": ""}))
+        self.assertFalse(os.path.exists(self.ledger))
+
+    def test_git_diff_header_for_missing_file_not_grounded(self):
+        stdout = "diff --git a/gone.py b/gone.py\n"
+        run_hook("post_record.py", payload(
+            "Bash", {"command": "git diff"}, self.cwd,
+            tool_response={"stdout": stdout, "stderr": ""}))
+        self.assertFalse(os.path.exists(self.ledger))
+
+    def test_grep_content_output_grounds_listed_files(self):
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload(
+            "Grep", {"pattern": "x", "path": self.cwd, "output_mode": "content"},
+            self.cwd, tool_response={"content": f"{p}:1:x\n"}))
+        self.assertIn(p, self.read_files())
+
+    def test_grep_files_with_matches_output_not_grounded(self):
+        # a filename listing proves the file matched, not that it was seen
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload(
+            "Grep", {"pattern": "x", "path": self.cwd,
+                     "output_mode": "files_with_matches"},
+            self.cwd, tool_response={"content": f"{p}\n"}))
+        self.assertFalse(os.path.exists(self.ledger))
+
     def test_webfetch_success_records_url_as_alive(self):
         run_hook("post_record.py",
                  payload("WebFetch", {"url": "https://a.com/p#frag", "prompt": "x"}, self.cwd))
         with open(self.ledger) as f:
             urls = json.load(f)["verified_urls"]
         self.assertEqual(urls.get("https://a.com/p"), 200)
+
+    def test_parallel_recorders_do_not_lose_accruals(self):
+        # Claude Code runs parallel tool calls → parallel post_record
+        # processes. Unsynchronized read-modify-write drops entries
+        # (observed live: 3 of 4 parallel Reads went unrecorded).
+        paths = [self.touch(f"f{i}.py") for i in range(12)]
+        procs = [
+            subprocess.Popen(
+                [sys.executable, os.path.join(HOOKS_DIR, "post_record.py")],
+                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, text=True)
+            for _ in paths
+        ]
+        for proc, p in zip(procs, paths):
+            proc.stdin.write(json.dumps(payload("Read", {"file_path": p}, self.cwd)))
+            proc.stdin.close()
+        for proc in procs:
+            self.assertEqual(proc.wait(timeout=30), 0)
+        recorded = self.read_files()
+        missing = [p for p in paths if p not in recorded]
+        self.assertEqual(missing, [])
 
     def test_corrupt_ledger_is_healed_not_crashed(self):
         os.makedirs(os.path.dirname(self.ledger), exist_ok=True)

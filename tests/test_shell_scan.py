@@ -88,6 +88,42 @@ class WriteTargetsTest(unittest.TestCase):
                          [("f.txt", shell_scan.TRUNCATE)])
 
 
+class HeredocTest(unittest.TestCase):
+    """Heredoc bodies are data, not shell — nothing inside them may match."""
+
+    def test_redirect_like_text_in_body_ignored(self):
+        cmd = "cat <<'EOF'\nuse a > b comparison\nEOF"
+        self.assertEqual(shell_scan.write_targets(cmd), [])
+
+    def test_redirect_on_heredoc_opener_line_still_detected(self):
+        cmd = "cat <<EOF > out.txt\nbody > noise\nEOF"
+        self.assertEqual(shell_scan.write_targets(cmd),
+                         [("out.txt", shell_scan.TRUNCATE)])
+
+    def test_install_like_text_in_body_ignored(self):
+        cmd = "cat <<EOF\npip install totally-fake-pkg\nEOF"
+        self.assertEqual(shell_scan.package_specs(cmd), [])
+
+    def test_url_in_body_ignored(self):
+        cmd = "cat <<EOF\ncurl https://a.com/dead\nEOF"
+        self.assertEqual(shell_scan.fetch_urls(cmd), [])
+
+    def test_command_after_heredoc_still_scanned(self):
+        cmd = "cat <<EOF\nbody\nEOF\necho hi > real.txt"
+        self.assertEqual(shell_scan.write_targets(cmd),
+                         [("real.txt", shell_scan.TRUNCATE)])
+
+    def test_tab_indented_terminator_with_dash(self):
+        cmd = "cat <<-EOF\n\tbody > noise\n\tEOF\necho hi > real.txt"
+        self.assertEqual(shell_scan.write_targets(cmd),
+                         [("real.txt", shell_scan.TRUNCATE)])
+
+    def test_bit_shift_is_not_a_heredoc(self):
+        # $((1<<2)) must not swallow the rest of the command as a body
+        cmd = "echo $((1<<2))\npip install requests"
+        self.assertEqual(shell_scan.package_specs(cmd), [("pypi", "requests")])
+
+
 class FetchUrlsTest(unittest.TestCase):
     def urls(self, command):
         return shell_scan.fetch_urls(command)

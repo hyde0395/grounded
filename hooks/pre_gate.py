@@ -11,6 +11,7 @@ unreadable, fail open; block only when absence of evidence is unambiguous.
 import json
 import os
 import sys
+import time
 
 import ledger_io
 import registry
@@ -21,6 +22,38 @@ import verdict
 GATED_FILE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 MAX_REGISTRY_LOOKUPS = 5
 MAX_URL_CHECKS = 3
+NETWORK_BUDGET_SECONDS = 5.0
+
+# Injected once after any warning. A warning that repeats on every retry
+# reads like an escalating problem and sends the model chasing it; saying
+# it is advisory and non-repeating keeps the task on course.
+WARN_GUIDANCE = (
+    "[grounded] The warning above is advisory and will not be repeated this "
+    "session. Do not retry the call or change course just to clear it — "
+    "verify the evidence if it matters, then continue the task."
+)
+
+
+class _Budget:
+    """Total wall-clock allowance for network lookups in one hook call.
+
+    Each lookup has its own short timeout, but five registry probes plus
+    three URL checks could stack toward ~20s of gate latency. Past the
+    budget, uncached lookups are skipped (fail open); caches still apply.
+    """
+
+    def __init__(self, seconds=NETWORK_BUDGET_SECONDS):
+        self.deadline = time.monotonic() + seconds
+
+    def exhausted(self):
+        return time.monotonic() >= self.deadline
+
+
+def _mtime(path):
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
 
 
 def _cacheable(status):
@@ -29,8 +62,9 @@ def _cacheable(status):
     return status is not None and (200 <= status < 400 or status in (404, 410, 0))
 
 
-def _gate_urls(urls, ledger):
-    """Verdicts for fetch targets; returns (stops, warns, dirty)."""
+def _gate_urls(urls, ledger, budget):
+    """Verdicts for fetch targets; returns (stops, warn_pairs, dirty) where
+    warn_pairs are (dedup_key, reason)."""
     stops, warns, dirty = [], [], False
     for url in urls[:MAX_URL_CHECKS]:
         if not urlcheck.is_checkable(url):
@@ -38,6 +72,8 @@ def _gate_urls(urls, ledger):
         key = urlcheck.normalize_url(url)
         status = ledger["verified_urls"].get(key)
         if status is None:
+            if budget.exhausted():
+                continue  # unchecked ≠ dead — skip silently, fail open
             status = urlcheck.check_url(key)
             if _cacheable(status):
                 ledger["verified_urls"][key] = status
@@ -46,8 +82,29 @@ def _gate_urls(urls, ledger):
         if v.decision == verdict.STOP:
             stops.append(v.reason)
         elif v.decision == verdict.WARN:
-            warns.append(v.reason)
+            warns.append((f"g3:{key}", v.reason))
     return stops, warns, dirty
+
+
+def _claim_warns(ledger, warn_pairs):
+    """Once-per-session warnings: drop already-claimed keys, mark the rest.
+
+    Re-injecting the same warning on every retry pollutes the model's
+    context and invites loops; one mention is the whole point of a WARN.
+    """
+    fresh = []
+    for key, reason in warn_pairs:
+        if key not in ledger["warned"]:
+            ledger["warned"][key] = int(time.time())
+            fresh.append(reason)
+    return fresh
+
+
+def _warn_key(reason, path, mtime):
+    if reason.startswith("[grounded freshness]"):
+        # keyed to the change itself: a *new* on-disk change warns anew
+        return f"freshness:{path}:{int(mtime or 0)}"
+    return f"g1s-append:{path}"
 
 
 def gate_file_tool(payload):
@@ -56,17 +113,26 @@ def gate_file_tool(payload):
     if not raw:
         return 0
     cwd = payload.get("cwd") or "."
+    cfg = ledger_io.load_config(cwd)
+    if not (cfg["g-1"] or cfg["freshness"]):
+        return 0
     path = ledger_io.normalize(raw, cwd)
     ledger = ledger_io.load_ledger(cwd)
     if ledger is None:
         return 0  # corrupt ledger: fail open rather than false-block
+    m = _mtime(path) if cfg["freshness"] else None
     v = verdict.gate_file_action(
-        payload.get("tool_name"), path, os.path.exists(path), ledger["read_files"]
+        payload.get("tool_name"), path, os.path.exists(path),
+        ledger["read_files"], mtime=m,
     )
-    if v.decision == verdict.STOP:
-        sys.stderr.write(v.reason + "\n")
-        return 2
-    return 0
+    if v.decision == verdict.STOP and cfg["g-1"]:
+        return _emit([v.reason], [])
+    warns = []
+    if v.decision == verdict.WARN:
+        warns = _claim_warns(ledger, [(_warn_key(v.reason, path, m), v.reason)])
+        if warns:
+            _save_caches(cwd, ledger)
+    return _emit([], warns)
 
 
 def gate_bash(payload):
@@ -74,28 +140,37 @@ def gate_bash(payload):
     if not command:
         return 0
     cwd = payload.get("cwd") or "."
+    cfg = ledger_io.load_config(cwd)
     ledger = ledger_io.load_ledger(cwd)
     if ledger is None:
         return 0  # corrupt ledger: fail open rather than false-block
-    stops, warns = [], []
+    stops, warn_pairs, dirty = [], [], False
+    budget = _Budget()
 
-    for raw, mode in shell_scan.write_targets(command):
+    write_targets = shell_scan.write_targets(command) if cfg["g-1s"] else []
+    for raw, mode in write_targets:
         path = ledger_io.normalize(raw, cwd)
+        m = _mtime(path) if cfg["freshness"] else None
         v = verdict.gate_shell_write(path, mode, os.path.exists(path),
-                                     ledger["read_files"])
+                                     ledger["read_files"], mtime=m)
         if v.decision == verdict.STOP:
             stops.append(v.reason)
         elif v.decision == verdict.WARN:
-            warns.append(v.reason)
+            warn_pairs.append((_warn_key(v.reason, path, m), v.reason))
 
-    url_stops, url_warns, dirty = _gate_urls(shell_scan.fetch_urls(command), ledger)
-    stops.extend(url_stops)
-    warns.extend(url_warns)
+    if cfg["g-3"]:
+        url_stops, url_warns, dirty = _gate_urls(shell_scan.fetch_urls(command),
+                                                 ledger, budget)
+        stops.extend(url_stops)
+        warn_pairs.extend(url_warns)
 
-    for ecosystem, name in shell_scan.package_specs(command)[:MAX_REGISTRY_LOOKUPS]:
+    package_specs = shell_scan.package_specs(command) if cfg["g-2"] else []
+    for ecosystem, name in package_specs[:MAX_REGISTRY_LOOKUPS]:
         key = f"{ecosystem}:{name}"
         exists = ledger["known_pkgs"].get(key)
         if exists is None:
+            if budget.exhausted():
+                continue  # unchecked ≠ hallucinated — skip, fail open
             exists = registry.check_package(ecosystem, name)
             if exists is not None:  # only cache definitive answers
                 ledger["known_pkgs"][key] = exists
@@ -104,9 +179,23 @@ def gate_bash(payload):
         if v.decision == verdict.STOP:
             stops.append(v.reason)
 
+    warns = []
+    if not stops:  # a blocked call delivers no warns — don't claim them yet
+        warns = _claim_warns(ledger, warn_pairs)
+        dirty = dirty or bool(warns)
     if dirty:
-        ledger_io.save_ledger(cwd, ledger)
+        _save_caches(cwd, ledger)
     return _emit(stops, warns)
+
+
+def _save_caches(cwd, ledger):
+    """Persist lookup caches and claimed warns without clobbering
+    concurrent read accruals."""
+    ledger_io.update_ledger(cwd, lambda fresh: (
+        fresh["verified_urls"].update(ledger["verified_urls"]),
+        fresh["known_pkgs"].update(ledger["known_pkgs"]),
+        fresh["warned"].update(ledger["warned"]),
+    ))
 
 
 def gate_webfetch(payload):
@@ -114,12 +203,18 @@ def gate_webfetch(payload):
     if not url:
         return 0
     cwd = payload.get("cwd") or "."
+    if not ledger_io.load_config(cwd)["g-3"]:
+        return 0
     ledger = ledger_io.load_ledger(cwd)
     if ledger is None:
         return 0  # corrupt ledger: fail open rather than false-block
-    stops, warns, dirty = _gate_urls([url], ledger)
+    stops, warn_pairs, dirty = _gate_urls([url], ledger, _Budget())
+    warns = []
+    if not stops:
+        warns = _claim_warns(ledger, warn_pairs)
+        dirty = dirty or bool(warns)
     if dirty:
-        ledger_io.save_ledger(cwd, ledger)
+        _save_caches(cwd, ledger)
     return _emit(stops, warns)
 
 
@@ -131,7 +226,7 @@ def _emit(stops, warns):
         print(json.dumps({"hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "allow",
-            "additionalContext": "\n".join(warns),
+            "additionalContext": "\n".join(warns + [WARN_GUIDANCE]),
         }}))
     return 0
 

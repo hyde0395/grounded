@@ -66,6 +66,34 @@ class PreGateTest(unittest.TestCase):
         r = run_hook("pre_gate.py", payload("Edit", "a.py", self.cwd))
         self.assertEqual(r.returncode, 0)
 
+    def test_edit_stale_file_warns_via_additional_context(self):
+        # file was read long ago (ledger ts 1000) but its mtime is "now"
+        p = self.touch("a.py")
+        self.write_ledger({p: 1000})
+        r = run_hook("pre_gate.py", payload("Edit", p, self.cwd))
+        self.assertEqual(r.returncode, 0)
+        out = json.loads(r.stdout)
+        ctx = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("changed", ctx)
+        self.assertIn("a.py", ctx)
+
+    def test_stale_warn_not_repeated_for_same_change(self):
+        p = self.touch("a.py")
+        self.write_ledger({p: 1000})
+        first = run_hook("pre_gate.py", payload("Edit", p, self.cwd))
+        self.assertIn("changed", first.stdout)
+        second = run_hook("pre_gate.py", payload("Edit", p, self.cwd))
+        self.assertEqual(second.stdout, "")
+
+    def test_stale_warn_fires_again_after_a_new_change(self):
+        p = self.touch("a.py")
+        self.write_ledger({p: 1000})
+        run_hook("pre_gate.py", payload("Edit", p, self.cwd))
+        mtime = os.path.getmtime(p) + 10  # the file changed yet again
+        os.utime(p, (mtime, mtime))
+        r = run_hook("pre_gate.py", payload("Edit", p, self.cwd))
+        self.assertIn("changed", r.stdout)
+
     def test_missing_ledger_blocks_edit(self):
         p = self.touch("a.py")
         r = run_hook("pre_gate.py", payload("Edit", p, self.cwd))
@@ -154,6 +182,32 @@ class BashGateTest(unittest.TestCase):
         ctx = out["hookSpecificOutput"]["additionalContext"]
         self.assertIn("[grounded G-1]", ctx)
         self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "allow")
+
+    def test_append_warn_includes_advisory_suffix(self):
+        p = self.touch("a.txt")
+        self.write_ledger()
+        r = run_hook("pre_gate.py", bash_payload(f"echo x >> {p}", self.cwd))
+        ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("advisory", ctx)
+
+    def test_append_warn_not_repeated_on_second_attempt(self):
+        # warnings are idempotent: re-running the same call must not
+        # re-inject context (a repeated warning invites retry loops)
+        p = self.touch("a.txt")
+        self.write_ledger()
+        first = run_hook("pre_gate.py", bash_payload(f"echo x >> {p}", self.cwd))
+        self.assertIn("[grounded G-1]", first.stdout)
+        second = run_hook("pre_gate.py", bash_payload(f"echo x >> {p}", self.cwd))
+        self.assertEqual(second.returncode, 0)
+        self.assertEqual(second.stdout, "")
+
+    def test_warn_dedup_is_per_target(self):
+        a = self.touch("a.txt")
+        b = self.touch("b.txt")
+        self.write_ledger()
+        run_hook("pre_gate.py", bash_payload(f"echo x >> {a}", self.cwd))
+        r = run_hook("pre_gate.py", bash_payload(f"echo x >> {b}", self.cwd))
+        self.assertIn("[grounded G-1]", r.stdout)
 
     def test_relative_redirect_target_resolved_against_cwd(self):
         self.touch("a.txt")

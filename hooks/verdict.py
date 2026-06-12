@@ -10,19 +10,44 @@ PASS = "pass"
 WARN = "warn"
 STOP = "stop"
 
+# Ledger timestamps are second-truncated and some filesystems keep coarse
+# mtimes, so a fresh read can trail its own mtime by just under a second.
+FRESHNESS_SLACK = 1
+
 Verdict = namedtuple("Verdict", ["decision", "reason"])
 
+# Human-facing registry names for G-2 messages (lookup itself lives in
+# registry.py; this module stays free of I/O imports).
+REGISTRY_LABELS = {"npm": "npm registry", "pypi": "PyPI", "crates": "crates.io"}
 
-def gate_file_action(tool_name, path, file_exists, read_files):
+
+def _stale_verdict(path, read_files, mtime):
+    """WARN if the file changed on disk after it was read; None otherwise."""
+    ts = read_files.get(path)
+    if mtime is None or not isinstance(ts, (int, float)):
+        return None  # unknown state is not evidence of staleness — fail open
+    if mtime <= ts + FRESHNESS_SLACK:
+        return None
+    return Verdict(
+        WARN,
+        f"[grounded freshness] {path} has changed on disk since it was read "
+        "this session. Proceeding, but the content you remember may be stale "
+        "— re-read the file before relying on it.",
+    )
+
+
+def gate_file_action(tool_name, path, file_exists, read_files, mtime=None):
     """G-1: a file may only be edited if it was read this session.
 
     `path` must already be normalized; `read_files` is the ledger section
-    mapping normalized paths to read timestamps.
+    mapping normalized paths to read timestamps. `mtime` (optional) enables
+    the freshness check: a read invalidated by a later on-disk change warns.
     """
     if tool_name == "Write" and not file_exists:
         return Verdict(PASS, "creating a new file needs no prior read")
     if path in read_files:
-        return Verdict(PASS, "file was read this session")
+        return _stale_verdict(path, read_files, mtime) \
+            or Verdict(PASS, "file was read this session")
     return Verdict(
         STOP,
         f"[grounded G-1] No record of reading {path} in this session. "
@@ -31,7 +56,7 @@ def gate_file_action(tool_name, path, file_exists, read_files):
     )
 
 
-def gate_shell_write(path, mode, file_exists, read_files):
+def gate_shell_write(path, mode, file_exists, read_files, mtime=None):
     """G-1 for shell-mediated writes (sed -i, tee, redirections).
 
     Truncating or rewriting a file never seen destroys content blindly →
@@ -40,7 +65,8 @@ def gate_shell_write(path, mode, file_exists, read_files):
     if not file_exists:
         return Verdict(PASS, "creating a new file needs no prior read")
     if path in read_files:
-        return Verdict(PASS, "file was read this session")
+        return _stale_verdict(path, read_files, mtime) \
+            or Verdict(PASS, "file was read this session")
     if mode == "append":
         return Verdict(
             WARN,
@@ -89,13 +115,11 @@ def gate_package(ecosystem, name, exists):
     `exists` is tri-state from registry.check_package; None (unreachable,
     rate-limited) must pass — a network hiccup is not evidence of hallucination.
     """
-    import registry
-
     if exists is False:
         return Verdict(
             STOP,
             f"[grounded G-2] Package '{name}' was not found on "
-            f"{registry.registry_label(ecosystem)}. This usually means a "
+            f"{REGISTRY_LABELS.get(ecosystem, ecosystem)}. This usually means a "
             "hallucinated or misspelled package name. Search the registry for "
             "the correct name before installing.",
         )

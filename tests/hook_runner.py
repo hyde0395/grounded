@@ -7,10 +7,14 @@ import sys
 HOOKS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hooks")
 
 
-def run_hook(script, payload):
+def run_hook(script, payload, env=None):
+    merged = dict(os.environ)
+    merged.pop("GROUNDED_DISABLE", None)  # isolate tests from the host shell
+    merged.update(env or {})
     return subprocess.run(
         [sys.executable, os.path.join(HOOKS_DIR, script)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
+        env=merged,
     )

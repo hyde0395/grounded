@@ -9,17 +9,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-USER_AGENT = "grounded/0.2 (+https://github.com/hyde0395/grounded)"
+USER_AGENT = "grounded/0.5 (+https://github.com/hyde0395/grounded)"
 
 REGISTRIES = {
-    "npm": ("npm registry", "https://registry.npmjs.org/{name}"),
-    "pypi": ("PyPI", "https://pypi.org/simple/{name}/"),
-    "crates": ("crates.io", "https://crates.io/api/v1/crates/{name}"),
+    "npm": "https://registry.npmjs.org/{name}",
+    "pypi": "https://pypi.org/simple/{name}/",
+    "crates": "https://crates.io/api/v1/crates/{name}",
 }
-
-
-def registry_label(ecosystem):
-    return REGISTRIES.get(ecosystem, (ecosystem, ""))[0]
 
 
 def check_package(ecosystem, name, timeout=2.5, opener=None):
@@ -28,7 +24,7 @@ def check_package(ecosystem, name, timeout=2.5, opener=None):
     if ecosystem not in REGISTRIES:
         return None
     opener = opener or urllib.request.urlopen
-    url = REGISTRIES[ecosystem][1].format(name=urllib.parse.quote(name, safe=""))
+    url = REGISTRIES[ecosystem].format(name=urllib.parse.quote(name, safe=""))
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         resp = opener(req, timeout=timeout)

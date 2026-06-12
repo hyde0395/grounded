@@ -34,7 +34,8 @@ class SessionStartTest(unittest.TestCase):
     def test_startup_creates_empty_ledger(self):
         r = run_hook("session_start.py", payload(self.cwd, "startup"))
         self.assertEqual(r.returncode, 0)
-        self.assertEqual(self.read_ledger(), {"read_files": {}, "verified_urls": {}, "known_pkgs": {}})
+        self.assertEqual(self.read_ledger(), {"read_files": {}, "verified_urls": {},
+                                              "known_pkgs": {}, "warned": {}})
 
     def test_startup_resets_existing_ledger(self):
         self.seed_ledger({"/old/file.py": 1})

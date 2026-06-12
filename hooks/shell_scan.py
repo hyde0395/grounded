@@ -14,7 +14,7 @@ APPEND = "append"      # >>, tee -a       — adds blindly, but preserves
 INPLACE = "inplace"    # sed -i, perl -i  — rewrites content never seen
 
 _QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
-_OPERATORS = re.compile(r"\|\||&&|[|;]")
+_OPERATORS = re.compile(r"\|\||&&|[|;\n]")
 _REDIRECT = re.compile(r"(>>|>)\s*([^\s|;&<>]+)")
 _UNRESOLVABLE = set("$`(){}*?")
 _SKIP_PREFIXES = ("/dev/", "/proc/", "-")
@@ -23,6 +23,32 @@ _SKIP_PREFIXES = ("/dev/", "/proc/", "-")
 def _mask_quotes(command):
     """Blank out quoted spans (same length) so operators inside quotes are inert."""
     return _QUOTED.sub(lambda m: " " * len(m.group(0)), command)
+
+
+# Delimiter must start like an identifier so $((1<<2)) is not a heredoc.
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_]\w*)\1")
+
+
+def _mask_heredocs(command):
+    """Blank out heredoc bodies (same length) — they are data, not shell.
+
+    The opener line itself is kept: `cat <<EOF > out.txt` still redirects.
+    """
+    pos = 0
+    while True:
+        m = _HEREDOC.search(command, pos)
+        if m is None:
+            return command
+        body_start = command.find("\n", m.end()) + 1
+        if body_start == 0:  # no newline → no body in this string
+            return command
+        terminator = re.compile(r"^\t*" + re.escape(m.group(2)) + r"[ \t]*$",
+                                re.MULTILINE)
+        t = terminator.search(command, body_start)
+        body_end = t.start() if t else len(command)
+        masked = re.sub(r"[^\n]", " ", command[body_start:body_end])
+        command = command[:body_start] + masked + command[body_end:]
+        pos = t.end() if t else len(command)
 
 
 def _split_segments(command):
@@ -113,6 +139,7 @@ def _segment_write_targets(tokens):
 
 def write_targets(command):
     """[(raw_path, mode)] of files this command writes, order-preserving dedup."""
+    command = _mask_heredocs(command)
     found = []
     masked = _mask_quotes(command)
     for op, target in _REDIRECT.findall(masked):
@@ -236,6 +263,7 @@ def _segment_fetch_urls(tokens):
 
 def fetch_urls(command):
     """[url] this command fetches (GET-style curl/wget only), deduped."""
+    command = _mask_heredocs(command)
     found = []
     for segment in _split_segments(command):
         found.extend(_segment_fetch_urls(_tokens(segment)))
@@ -249,6 +277,7 @@ def fetch_urls(command):
 
 def package_specs(command):
     """[(ecosystem, name)] this command installs, order-preserving dedup."""
+    command = _mask_heredocs(command)
     found = []
     for segment in _split_segments(command):
         found.extend(_segment_package_specs(_tokens(segment)))

@@ -4,16 +4,58 @@ Hooks are stateless one-shot processes; this file IS the session state.
 Philosophy (spec §05): false positives are worse than misses — when the
 ledger is unreadable, callers fail open.
 """
+import contextlib
 import json
 import os
 import tempfile
 
+try:
+    import fcntl
+except ImportError:  # Windows: no fcntl — degrade to lock-free best effort
+    fcntl = None
+
 LEDGER_DIR = ".grounded"
 LEDGER_FILE = "ledger.json"
+LOCK_FILE = "ledger.lock"
+CONFIG_FILE = "config.json"
+
+# Canonical toggle names. g-1s is the shell-write arm of G-1; grep-evidence
+# controls whether a Grep counts as having read the file (strict mode: off).
+RULES = ("g-1", "g-1s", "g-2", "g-3", "freshness", "grep-evidence")
+
+
+def _canon(name):
+    return str(name).strip().lower().replace("_", "-")
+
+
+def load_config(cwd, env=None):
+    """Enabled flag per rule from .grounded/config.json + GROUNDED_DISABLE.
+
+    Absent or corrupt config enables everything (the toggles exist to opt
+    out, so failure to read them must not change default behavior).
+    """
+    cfg = {rule: True for rule in RULES}
+    try:
+        with open(os.path.join(cwd, LEDGER_DIR, CONFIG_FILE), encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeDecodeError):
+        data = None
+    if isinstance(data, dict):
+        for key, value in data.items():
+            name = _canon(key)
+            if name in cfg and isinstance(value, bool):
+                cfg[name] = value
+    env = os.environ if env is None else env
+    for name in (env.get("GROUNDED_DISABLE") or "").split(","):
+        name = _canon(name)
+        if name in cfg:
+            cfg[name] = False
+    return cfg
 
 
 def default_ledger():
-    return {"read_files": {}, "verified_urls": {}, "known_pkgs": {}}
+    return {"read_files": {}, "verified_urls": {}, "known_pkgs": {},
+            "warned": {}}
 
 
 def ledger_path(cwd):
@@ -52,6 +94,45 @@ def save_ledger(cwd, ledger):
             os.unlink(tmp)
         except OSError:
             pass
+
+
+@contextlib.contextmanager
+def _locked(cwd):
+    """Exclusive advisory lock; any failure degrades to running unlocked."""
+    if fcntl is None:
+        yield
+        return
+    lock_path = os.path.join(cwd, LEDGER_DIR, LOCK_FILE)
+    try:
+        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+        f = open(lock_path, "w")
+    except OSError:
+        yield
+        return
+    try:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX)
+        except OSError:
+            pass
+        yield
+    finally:
+        f.close()  # close releases the flock
+
+
+def update_ledger(cwd, mutate):
+    """Read-modify-write as one locked step.
+
+    Parallel tool calls mean parallel hook processes; an unsynchronized
+    load→save pair lets one writer overwrite another's accrual. `mutate`
+    receives the ledger dict and edits it in place. Corrupt state heals
+    to a fresh ledger (recording must never crash or block).
+    """
+    with _locked(cwd):
+        ledger = load_ledger(cwd)
+        if ledger is None:
+            ledger = default_ledger()
+        mutate(ledger)
+        save_ledger(cwd, ledger)
 
 
 def normalize(path, cwd):
