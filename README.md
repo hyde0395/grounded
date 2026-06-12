@@ -11,6 +11,10 @@ No LLM in the loop. No network calls (for the core rule). Just hooks, a local le
 ![engine](https://img.shields.io/badge/judgment-deterministic%20%C2%B7%20no%20LLM-brightgreen)
 ![category](https://img.shields.io/badge/category-grounding%20enforcement-purple)
 
+![grounded blocking a hallucinated package install and a blind sed -i, then passing a proper read-then-edit](demo/demo.gif)
+
+*A real session: a hallucinated `pip install` blocked by G-2, a blind `sed -i` blocked by G-1, and a proper read-then-edit passing — ending with the file actually changed.*
+
 ---
 
 ## Why
