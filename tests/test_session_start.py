@@ -59,6 +59,14 @@ class SessionStartTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(self.read_ledger()["read_files"], {})
 
+    def test_injects_prompt_rule_as_additional_context(self):
+        r = run_hook("session_start.py", payload(self.cwd, "startup"))
+        out = json.loads(r.stdout)
+        ctx = out["hookSpecificOutput"]["additionalContext"]
+        self.assertEqual(out["hookSpecificOutput"]["hookEventName"], "SessionStart")
+        self.assertIn("[grounded]", ctx)
+        self.assertIn("verified", ctx.lower())
+
     def test_garbage_stdin_exits_zero(self):
         r = subprocess.run(
             [sys.executable, os.path.join(HOOKS_DIR, "session_start.py")],
