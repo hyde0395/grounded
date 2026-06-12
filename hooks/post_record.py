@@ -12,6 +12,7 @@ import sys
 import time
 
 import ledger_io
+import shell_scan
 import urlcheck
 
 RECORDING_TOOLS = {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit"}
@@ -46,7 +47,12 @@ def extract_paths(tool_name, tool_input, cwd):
         if p and os.path.isfile(ledger_io.normalize(p, cwd)):
             raw.append(p)
     elif tool_name == "Bash":
-        raw.extend(cat_targets(tool_input.get("command") or "", cwd))
+        command = tool_input.get("command") or ""
+        raw.extend(cat_targets(command, cwd))
+        # A truncating write (`>`/tee) succeeded: the model authored the file's
+        # entire current content. Appends and sed -i still leave content unseen.
+        raw.extend(t for t, mode in shell_scan.write_targets(command)
+                   if mode == shell_scan.TRUNCATE)
     return [ledger_io.normalize(p, cwd) for p in raw]
 
 

@@ -75,6 +75,24 @@ class PostRecordTest(unittest.TestCase):
         run_hook("post_record.py", payload("Bash", {"command": "ls -la"}, self.cwd))
         self.assertFalse(os.path.exists(self.ledger))
 
+    def test_bash_truncate_write_grounds_the_file(self):
+        # the model knows the full content it just wrote with `>`
+        p = self.touch("made.txt")
+        run_hook("post_record.py", payload("Bash", {"command": f"echo hi > {p}"}, self.cwd))
+        self.assertIn(p, self.read_files())
+
+    def test_bash_append_does_not_ground_the_file(self):
+        # appending blind says nothing about the rest of the file
+        p = self.touch("log.txt")
+        run_hook("post_record.py", payload("Bash", {"command": f"echo hi >> {p}"}, self.cwd))
+        self.assertFalse(os.path.exists(self.ledger))
+
+    def test_bash_sed_inplace_does_not_ground_the_file(self):
+        # sed transforms content the model never saw — still unknown
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"sed -i 's/a/b/' {p}"}, self.cwd))
+        self.assertFalse(os.path.exists(self.ledger))
+
     def test_webfetch_success_records_url_as_alive(self):
         run_hook("post_record.py",
                  payload("WebFetch", {"url": "https://a.com/p#frag", "prompt": "x"}, self.cwd))

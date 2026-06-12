@@ -124,7 +124,7 @@ We'd rather tell you up front than have you find out:
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests   # 125 tests, hooks exercised via real stdin/exit-code interface
+python3 -m unittest discover -s tests   # 128 tests, hooks exercised via real stdin/exit-code interface
 ```
 
 The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post_record.py`, `pre_gate.py`), pure logic (`verdict.py`, `shell_scan.py` — no I/O, no LLM), and side effects at the edges (`ledger_io.py`, `registry.py`, `urlcheck.py`). Network calls take an injectable opener, so the whole suite runs offline.
