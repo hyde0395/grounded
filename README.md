@@ -155,6 +155,36 @@ dependencies). On Windows, hooks run under Git Bash (installed with Git); if
 Python is missing entirely, grounded fails open — your tools keep working,
 just unguarded.
 
+### Verify it yourself in 60 seconds
+
+Every claim above is reproducible in any project with grounded installed:
+
+1. Ask Claude to run `pip install reqests` (the classic typo) → blocked
+   before execution: `[grounded G-2] Package 'reqests' was not found on PyPI…`
+2. Ask it to run `sed -i 's/a/b/' <a file it hasn't opened>` → blocked:
+   `[grounded G-1] … no record of reading it this session.`
+3. Ask it to read that file first, then edit it → passes silently, and the
+   change lands.
+
+The GIF at the top is exactly this, recorded unscripted against a live
+session (`demo/demo.tape` reproduces it).
+
+## Network access & privacy
+
+No telemetry, no analytics, no calls home. The complete list of network
+traffic grounded can generate:
+
+- **G-2** — one existence lookup against the public registry
+  (registry.npmjs.org / pypi.org / crates.io) the first time a session
+  installs a given package; the answer is cached in the local ledger.
+- **G-3** — one HEAD probe (GET fallback) against a URL the agent is about
+  to fetch or cite; private/localhost hosts are never probed.
+
+Both rules can be turned off (`{"G-2": false, "G-3": false}` in
+`.grounded/config.json`), every lookup is capped at 2.5s with a 5s
+per-command budget, and G-1/G-1s/freshness work entirely offline. All state
+lives in `.grounded/ledger.json` inside your project.
+
 ## Honest limitations
 
 We'd rather tell you up front than have you find out:
