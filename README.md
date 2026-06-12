@@ -67,7 +67,7 @@ agent chasing the warning instead of the task.
 | Rule | What it enforces | Status |
 |---|---|---|
 | **G-1** Read-before-edit | A file can't be edited unless it was read this session (Read, Grep, `cat`, `git diff`/`git show` output) | ✅ v0.1 |
-| **G-1s** Shell-write gating | `sed -i`, `perl -i`, `tee`, `>` on a never-read file → blocked; `>>` (append) → warning only | ✅ v0.2 |
+| **G-1s** Shell-write gating | `sed -i`, `perl -i`, `tee`, `>`, `cp`/`mv` onto a never-read file → blocked; `>>` (append) → warning only | ✅ v0.2 |
 | **G-2** Verify-before-install | A package can't be installed unless it exists on its registry (npm / PyPI / crates.io) | ✅ v0.2 |
 | **G-3** Fetch-before-cite | Dead URLs (404/410/DNS failure) are blocked; ambiguous ones (403/5xx/timeout) only warn | ✅ v0.3 |
 | **freshness** Stale-read detection | A file that changed on disk *after* it was read → warning to re-read before relying on it | ✅ v0.5 |

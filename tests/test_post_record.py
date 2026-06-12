@@ -90,6 +90,14 @@ class PostRecordTest(unittest.TestCase):
         run_hook("post_record.py", payload("Bash", {"command": f"echo hi >> {p}"}, self.cwd))
         self.assertFalse(os.path.exists(self.ledger))
 
+    def test_bash_cp_does_not_ground_the_destination(self):
+        # the destination now holds the *source's* content, which the model
+        # has not necessarily seen — unlike `>` it authored nothing
+        src = self.touch("src.py")
+        dst = self.touch("dst.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"cp {src} {dst}"}, self.cwd))
+        self.assertFalse(os.path.exists(self.ledger))
+
     def test_bash_sed_inplace_does_not_ground_the_file(self):
         # sed transforms content the model never saw — still unknown
         p = self.touch("a.py")

@@ -150,6 +150,8 @@ def gate_bash(payload):
     write_targets = shell_scan.write_targets(command) if cfg["g-1s"] else []
     for raw, mode in write_targets:
         path = ledger_io.normalize(raw, cwd)
+        if os.path.isdir(path):
+            continue  # cp/mv into a directory: actual file target unresolved
         m = _mtime(path) if cfg["freshness"] else None
         v = verdict.gate_shell_write(path, mode, os.path.exists(path),
                                      ledger["read_files"], mtime=m)

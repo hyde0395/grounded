@@ -88,6 +88,43 @@ class WriteTargetsTest(unittest.TestCase):
                          [("f.txt", shell_scan.TRUNCATE)])
 
 
+class CopyMoveTest(unittest.TestCase):
+    """cp/mv onto an existing file destroys content as surely as `>` does."""
+
+    def targets(self, command):
+        return shell_scan.write_targets(command)
+
+    def test_cp_basic(self):
+        self.assertEqual(self.targets("cp a.py b.py"),
+                         [("b.py", shell_scan.OVERWRITE)])
+
+    def test_mv_basic(self):
+        self.assertEqual(self.targets("mv tmp.py src/main.py"),
+                         [("src/main.py", shell_scan.OVERWRITE)])
+
+    def test_last_positional_is_destination(self):
+        self.assertEqual(self.targets("cp -r a.py b.py dst.py"),
+                         [("dst.py", shell_scan.OVERWRITE)])
+
+    def test_single_argument_is_not_a_write(self):
+        self.assertEqual(self.targets("cp a.py"), [])
+
+    def test_no_clobber_is_not_a_write(self):
+        self.assertEqual(self.targets("cp -n a.py b.py"), [])
+        self.assertEqual(self.targets("mv --no-clobber a.py b.py"), [])
+
+    def test_target_directory_flag_bails_out(self):
+        # -t names a directory; the real per-file targets are unresolvable
+        self.assertEqual(self.targets("cp -t backup a.py b.py"), [])
+
+    def test_sudo_cp(self):
+        self.assertEqual(self.targets("sudo cp a.conf /etc/app.conf"),
+                         [("/etc/app.conf", shell_scan.OVERWRITE)])
+
+    def test_variable_destination_skipped(self):
+        self.assertEqual(self.targets("cp a.py $DST"), [])
+
+
 class HeredocTest(unittest.TestCase):
     """Heredoc bodies are data, not shell — nothing inside them may match."""
 

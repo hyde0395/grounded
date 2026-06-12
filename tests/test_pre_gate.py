@@ -215,6 +215,38 @@ class BashGateTest(unittest.TestCase):
         r = run_hook("pre_gate.py", bash_payload("echo x > a.txt", self.cwd))
         self.assertEqual(r.returncode, 2)
 
+    def test_cp_onto_existing_unread_file_blocked(self):
+        src = self.touch("new.py")
+        dst = self.touch("main.py")
+        self.write_ledger()
+        r = run_hook("pre_gate.py", bash_payload(f"cp {src} {dst}", self.cwd))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("[grounded G-1]", r.stderr)
+
+    def test_cp_onto_read_file_passes(self):
+        src = self.touch("new.py")
+        dst = self.touch("main.py")
+        self.write_ledger(read_files={dst: 1})
+        r = run_hook("pre_gate.py", bash_payload(f"cp {src} {dst}", self.cwd))
+        self.assertEqual(r.returncode, 0)
+
+    def test_cp_to_new_path_passes(self):
+        src = self.touch("a.py")
+        self.write_ledger()
+        r = run_hook("pre_gate.py",
+                     bash_payload(f"cp {src} {self.cwd}/fresh.py", self.cwd))
+        self.assertEqual(r.returncode, 0)
+
+    def test_cp_into_existing_directory_passes(self):
+        # destination is a directory: the per-file target is dir/basename,
+        # which this parser does not resolve — never false-block on the dir
+        src = self.touch("a.py")
+        d = os.path.join(self.cwd, "subdir")
+        os.makedirs(d)
+        self.write_ledger()
+        r = run_hook("pre_gate.py", bash_payload(f"cp {src} {d}", self.cwd))
+        self.assertEqual(r.returncode, 0)
+
     def test_install_cached_absent_package_blocked_without_network(self):
         self.write_ledger(known_pkgs={"pypi:reqests": False})
         r = run_hook("pre_gate.py", bash_payload("pip install reqests", self.cwd))

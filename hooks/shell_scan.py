@@ -9,9 +9,11 @@ import os
 import re
 import shlex
 
-TRUNCATE = "truncate"  # > , tee          — destroys content never seen
-APPEND = "append"      # >>, tee -a       — adds blindly, but preserves
-INPLACE = "inplace"    # sed -i, perl -i  — rewrites content never seen
+TRUNCATE = "truncate"   # > , tee          — destroys content never seen
+APPEND = "append"       # >>, tee -a       — adds blindly, but preserves
+INPLACE = "inplace"     # sed -i, perl -i  — rewrites content never seen
+OVERWRITE = "overwrite"  # cp/mv onto file — replaces with content the model
+#                          may not have seen either (never accrued as a read)
 
 _QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
 _OPERATORS = re.compile(r"\|\||&&|[|;\n]")
@@ -134,6 +136,15 @@ def _segment_write_targets(tokens):
     if cmd == "tee":
         mode = APPEND if any(t in ("-a", "--append") for t in rest) else TRUNCATE
         return [(f, mode) for f in _positionals(rest, set(), False)]
+    if cmd in ("cp", "mv"):
+        if any(t in ("-n", "--no-clobber") for t in rest):
+            return []  # explicitly refuses to overwrite — nothing at risk
+        if any(t == "-t" or t.startswith("--target-directory") for t in rest):
+            return []  # per-file targets inside a directory: unresolvable
+        files = _positionals(rest, set(), False)
+        if len(files) < 2:
+            return []
+        return [(files[-1], OVERWRITE)]
     return []
 
 
