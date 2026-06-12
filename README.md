@@ -17,6 +17,8 @@ No LLM in the loop. No network calls (for the core rule). Just hooks, a local le
 
 The most expensive failure of AI coding agents isn't the dangerous command — existing security guardrails catch those. It's the agent **claiming it verified something it never did**: editing from a guess, installing a hallucinated package, citing a dead link. Every ungrounded action stacks the next action on a false premise, and a human pays the bill re-verifying everything.
 
+This isn't hypothetical. A [USENIX Security 2025 study](https://arxiv.org/abs/2406.10279) of 576,000 generated code samples found that **5.2–21.7% of LLM-recommended packages don't exist** (205,474 unique hallucinated names) — a supply-chain attack surface now known as [*slopsquatting*](https://en.wikipedia.org/wiki/Slopsquatting). G-2 closes it at the moment of `install`.
+
 Writing *"don't guess"* in your CLAUDE.md is a **suggestion** the model interprets at runtime — it can be talked out of it. A hook is **enforcement**: it runs no matter what the model thinks.
 
 | | Security guardrails (many) | grounded |
@@ -156,6 +158,25 @@ We'd rather tell you up front than have you find out:
 - **Bot walls cause false signals.** Cloudflare answering `curl` with 403 doesn't mean the link is dead — which is exactly why G-3 warns instead of blocks on 403.
 - **grounded is not an adversarial boundary.** Shell-write gating catches the common idioms (`sed -i`, `tee`, redirections) — the lazy path, not the evasive one. A model that deliberately hides a write behind `python -c` or base64 isn't being sloppy, it's evading a guardrail; that's a security problem, and the answer is sandboxing and permissions — the layer grounded explicitly complements, not replaces.
 - **What we promise:** grounding enforcement at the tool boundary. **What we don't:** catching every hallucination.
+
+## Related work
+
+grounded independently converges on two ideas the research community has
+recently formalized:
+
+- **[AgentSpec](https://arxiv.org/abs/2503.18666)** (ICSE 2026) frames agent
+  safety as *runtime enforcement*: trigger → predicate → enforcement rules
+  living outside the model. grounded is that model specialized to Claude
+  Code's hook boundary — matcher → ledger-backed verdict → exit code, ~30ms
+  per invocation (measured on an M-series MacBook), no LLM in the judgment
+  path.
+- **[CaMeL](https://arxiv.org/abs/2503.18813)** (Google DeepMind) treats the
+  LLM as an untrusted component and puts a deterministic layer in control.
+  CaMeL applies that stance to prompt injection; grounded applies it to
+  ungrounded action.
+- The package-hallucination problem G-2 targets is quantified in
+  [*"We Have a Package for You!"*](https://arxiv.org/abs/2406.10279)
+  (USENIX Security 2025).
 
 ## Development
 
