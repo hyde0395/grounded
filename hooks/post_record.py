@@ -12,6 +12,7 @@ import sys
 import time
 
 import ledger_io
+import urlcheck
 
 RECORDING_TOOLS = {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit"}
 # A `cat` segment ends at pipes, separators, or redirections.
@@ -55,9 +56,11 @@ def main():
     except (json.JSONDecodeError, UnicodeDecodeError):
         return 0
     cwd = payload.get("cwd") or "."
+    tool_name = payload.get("tool_name") or ""
     tool_input = payload.get("tool_input") or {}
-    paths = extract_paths(payload.get("tool_name") or "", tool_input, cwd)
-    if not paths:
+    paths = extract_paths(tool_name, tool_input, cwd)
+    url = tool_input.get("url") if tool_name == "WebFetch" else None
+    if not paths and not url:
         return 0
     ledger = ledger_io.load_ledger(cwd)
     if ledger is None:  # corrupt: heal with a fresh ledger
@@ -65,6 +68,9 @@ def main():
     now = int(time.time())
     for p in paths:
         ledger["read_files"][p] = now
+    if url:
+        # PostToolUse only fires on success, so the fetch went through
+        ledger["verified_urls"][urlcheck.normalize_url(url)] = 200
     ledger_io.save_ledger(cwd, ledger)
     return 0
 

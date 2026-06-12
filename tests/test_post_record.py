@@ -75,6 +75,13 @@ class PostRecordTest(unittest.TestCase):
         run_hook("post_record.py", payload("Bash", {"command": "ls -la"}, self.cwd))
         self.assertFalse(os.path.exists(self.ledger))
 
+    def test_webfetch_success_records_url_as_alive(self):
+        run_hook("post_record.py",
+                 payload("WebFetch", {"url": "https://a.com/p#frag", "prompt": "x"}, self.cwd))
+        with open(self.ledger) as f:
+            urls = json.load(f)["verified_urls"]
+        self.assertEqual(urls.get("https://a.com/p"), 200)
+
     def test_corrupt_ledger_is_healed_not_crashed(self):
         os.makedirs(os.path.dirname(self.ledger), exist_ok=True)
         with open(self.ledger, "w") as f:

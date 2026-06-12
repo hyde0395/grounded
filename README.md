@@ -6,7 +6,7 @@
 
 No LLM in the loop. No network calls (for the core rule). Just hooks, a local ledger, and exit codes.
 
-![version](https://img.shields.io/badge/version-0.2.0-blue)
+![version](https://img.shields.io/badge/version-0.3.0-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![engine](https://img.shields.io/badge/judgment-deterministic%20%C2%B7%20no%20LLM-brightgreen)
 ![category](https://img.shields.io/badge/category-grounding%20enforcement-purple)
@@ -62,7 +62,7 @@ Every rule resolves to one of three verdicts — and the design philosophy is **
 | **G-1** Read-before-edit | A file can't be edited unless it was read this session (Read, Grep, `cat`) | ✅ v0.1 |
 | **G-1s** Shell-write gating | `sed -i`, `perl -i`, `tee`, `>` on a never-read file → blocked; `>>` (append) → warning only | ✅ v0.2 |
 | **G-2** Verify-before-install | A package can't be installed unless it exists on its registry (npm / PyPI / crates.io) | ✅ v0.2 |
-| **G-3** Fetch-before-cite | Dead URLs (404/DNS) are blocked; ambiguous ones (403/timeout) only warn | 🗺️ planned |
+| **G-3** Fetch-before-cite | Dead URLs (404/410/DNS failure) are blocked; ambiguous ones (403/5xx/timeout) only warn | ✅ v0.3 |
 
 When a rule blocks, the model receives an actionable reason:
 
@@ -75,9 +75,12 @@ hallucinated or misspelled package name. Search the registry for the correct
 name before installing.
 ```
 
-G-2 lookups are cached in the session ledger (positive *and* negative), use a
-2.5s timeout, and **never block on network trouble** — an unreachable registry
-is not evidence of hallucination. A cached re-check costs ~50ms.
+G-2 and G-3 lookups are cached in the session ledger (positive *and*
+negative), use a 2.5s timeout, and **never block on network trouble** — an
+unreachable registry is not evidence of hallucination. A cached re-check costs
+~50ms. G-3 probes with HEAD only, skips private/localhost hosts (a dev server
+that isn't running yet is normal), and skips `curl -X POST`/`--data` calls
+(API endpoints legitimately reject HEAD probes).
 
 ## Install
 
@@ -121,10 +124,10 @@ We'd rather tell you up front than have you find out:
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests   # 91 tests, hooks exercised via real stdin/exit-code interface
+python3 -m unittest discover -s tests   # 125 tests, hooks exercised via real stdin/exit-code interface
 ```
 
-The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post_record.py`, `pre_gate.py`), pure logic (`verdict.py`, `shell_scan.py` — no I/O, no LLM), and side effects at the edges (`ledger_io.py`, `registry.py`). Registry calls take an injectable opener, so the whole suite runs offline.
+The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post_record.py`, `pre_gate.py`), pure logic (`verdict.py`, `shell_scan.py` — no I/O, no LLM), and side effects at the edges (`ledger_io.py`, `registry.py`, `urlcheck.py`). Network calls take an injectable opener, so the whole suite runs offline.
 
 ## Roadmap
 
@@ -132,8 +135,8 @@ The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post
 |---|---|---|
 | v0.1 ✅ | G-1 read-before-edit + session ledger | editing from a guess |
 | v0.2 ✅ | G-2 package-existence check + caching, shell-write gating (`sed -i`, `echo >`, `tee`) | hallucinated installs, Edit-tool bypasses |
-| v0.3 | G-3 URL liveness (block 404 / warn 403), marketplace plugin packaging | citing dead links |
-| v0.4 | bundled prompt rule for plain-text claims | text blind spot (partial) |
+| v0.3 ✅ | G-3 URL liveness (block 404·DNS-dead / warn 403·5xx) for WebFetch + curl/wget | citing dead links |
+| v0.4 | marketplace plugin packaging, bundled prompt rule for plain-text claims | text blind spot (partial) |
 | v0.5 | freshness — detect external edits after read, per-rule on/off | acting on stale evidence |
 
 ## License

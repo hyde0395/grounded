@@ -182,5 +182,64 @@ class BashGateTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
 
 
+class UrlGateTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cwd = os.path.realpath(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_ledger(self, verified_urls=None):
+        d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "ledger.json"), "w") as f:
+            json.dump({"read_files": {}, "verified_urls": verified_urls or {},
+                       "known_pkgs": {}}, f)
+
+    def webfetch(self, url):
+        return {"hook_event_name": "PreToolUse", "tool_name": "WebFetch",
+                "tool_input": {"url": url, "prompt": "x"}, "cwd": self.cwd}
+
+    def test_webfetch_cached_dead_url_blocked(self):
+        self.write_ledger({"https://a.com/dead": 404})
+        r = run_hook("pre_gate.py", self.webfetch("https://a.com/dead"))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("[grounded G-3]", r.stderr)
+
+    def test_webfetch_cached_alive_url_passes_silently(self):
+        self.write_ledger({"https://a.com/ok": 200})
+        r = run_hook("pre_gate.py", self.webfetch("https://a.com/ok"))
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout, "")
+
+    def test_webfetch_fragment_hits_cache(self):
+        self.write_ledger({"https://a.com/dead": 404})
+        r = run_hook("pre_gate.py", self.webfetch("https://a.com/dead#part"))
+        self.assertEqual(r.returncode, 2)
+
+    def test_webfetch_localhost_not_checked(self):
+        self.write_ledger()
+        r = run_hook("pre_gate.py", self.webfetch("http://localhost:3000/api"))
+        self.assertEqual(r.returncode, 0)
+
+    def test_bash_curl_cached_dead_blocked(self):
+        self.write_ledger({"https://a.com/dead": 404})
+        r = run_hook("pre_gate.py", bash_payload("curl -s https://a.com/dead", self.cwd))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("[grounded G-3]", r.stderr)
+
+    def test_bash_curl_post_to_cached_dead_not_gated(self):
+        self.write_ledger({"https://a.com/dead": 404})
+        r = run_hook("pre_gate.py",
+                     bash_payload("curl -X POST https://a.com/dead", self.cwd))
+        self.assertEqual(r.returncode, 0)
+
+    def test_bash_curl_cached_alive_passes(self):
+        self.write_ledger({"https://a.com/ok": 200})
+        r = run_hook("pre_gate.py", bash_payload("curl https://a.com/ok", self.cwd))
+        self.assertEqual(r.returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

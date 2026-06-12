@@ -9,7 +9,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Read|Grep|Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "matcher": "Read|Grep|Edit|Write|MultiEdit|NotebookEdit|Bash|WebFetch",
         "hooks": [
           { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/post_record.py\"" }
         ]
@@ -17,7 +17,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|WebFetch",
         "hooks": [
           { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/pre_gate.py\"" }
         ]
