@@ -6,7 +6,7 @@
 
 No LLM in the loop. No network calls (for the core rule). Just hooks, a local ledger, and exit codes.
 
-![version](https://img.shields.io/badge/version-0.3.0-blue)
+![version](https://img.shields.io/badge/version-0.4.0-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![engine](https://img.shields.io/badge/judgment-deterministic%20%C2%B7%20no%20LLM-brightgreen)
 ![category](https://img.shields.io/badge/category-grounding%20enforcement-purple)
@@ -84,7 +84,14 @@ that isn't running yet is normal), and skips `curl -X POST`/`--data` calls
 
 ## Install
 
-### As a project hook (today)
+### As a plugin (recommended)
+
+```
+/plugin marketplace add hyde0395/grounded
+/plugin install grounded@grounded
+```
+
+### As a project hook
 
 Copy `hooks/` into your project and register in `.claude/settings.json`:
 
@@ -106,11 +113,10 @@ Copy `hooks/` into your project and register in `.claude/settings.json`:
 }
 ```
 
-Requires Python 3 (stdlib only — zero dependencies).
-
-### As a plugin (coming)
-
-The repo is already plugin-shaped (`.claude-plugin/plugin.json` + `hooks/hooks.json`). Marketplace packaging lands with v0.4.
+**Requirements:** Python 3 on PATH as `python3` or `python` (stdlib only — zero
+dependencies). On Windows, hooks run under Git Bash (installed with Git); if
+Python is missing entirely, grounded fails open — your tools keep working,
+just unguarded.
 
 ## Honest limitations
 
@@ -136,8 +142,8 @@ The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post
 | v0.1 ✅ | G-1 read-before-edit + session ledger | editing from a guess |
 | v0.2 ✅ | G-2 package-existence check + caching, shell-write gating (`sed -i`, `echo >`, `tee`) | hallucinated installs, Edit-tool bypasses |
 | v0.3 ✅ | G-3 URL liveness (block 404·DNS-dead / warn 403·5xx) for WebFetch + curl/wget | citing dead links |
-| v0.4 | marketplace plugin packaging, bundled prompt rule for plain-text claims | text blind spot (partial) |
-| v0.5 | freshness — detect external edits after read, per-rule on/off | acting on stale evidence |
+| v0.4 ✅ | marketplace plugin packaging, Windows support (`python3`/`python` launcher) | install friction |
+| v0.5 | bundled prompt rule for plain-text claims, freshness — detect external edits after read, per-rule on/off | text blind spot (partial), acting on stale evidence |
 
 ## License
 

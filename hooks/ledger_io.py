@@ -62,4 +62,6 @@ def normalize(path, cwd):
     path = os.path.expanduser(path)
     if not os.path.isabs(path):
         path = os.path.join(cwd, path)
-    return os.path.realpath(path)
+    # normcase: identity on POSIX; on Windows it folds case and separators so
+    # C:\Foo and c:/foo land on the same ledger key.
+    return os.path.normcase(os.path.realpath(path))

@@ -1,0 +1,22 @@
+{
+  "name": "grounded",
+  "description": "Grounding enforcement for AI coding agents — block actions that lack evidence, deterministically.",
+  "owner": {
+    "name": "hyde0395",
+    "url": "https://github.com/hyde0395"
+  },
+  "plugins": [
+    {
+      "name": "grounded",
+      "source": "./",
+      "description": "Grounding enforcement guardrail — deterministically blocks ungrounded agent actions: editing files never read, installing hallucinated packages, fetching dead URLs. No LLM, no dependencies.",
+      "version": "0.4.0",
+      "author": { "name": "hyde0395", "url": "https://github.com/hyde0395" },
+      "homepage": "https://github.com/hyde0395/grounded",
+      "repository": "https://github.com/hyde0395/grounded",
+      "license": "MIT",
+      "keywords": ["guardrail", "hooks", "grounding", "hallucination", "verification"],
+      "category": "workflow"
+    }
+  ]
+}
