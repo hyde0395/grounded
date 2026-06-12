@@ -100,6 +100,54 @@ def _positionals(tokens, value_flags, drop_first_unless_flagged):
     return out
 
 
+def _sed_inplace_flag(token):
+    return (token == "--in-place" or token.startswith("--in-place=")
+            or (token.startswith("-i") and not token.startswith("--")))
+
+
+def _inplace_invocation(tokens):
+    """'sed -i' / 'perl -i' if `tokens` invoke an in-place editor, else None."""
+    for i, tok in enumerate(tokens):
+        base = os.path.basename(tok)
+        rest = tokens[i + 1:]
+        if base == "sed" and any(_sed_inplace_flag(t) for t in rest):
+            return "sed -i"
+        if base == "perl" and any(t.startswith("-i") for t in rest):
+            return "perl -i"
+    return None
+
+
+def _segment_batch_hint(tokens):
+    tokens = _strip_prefixes(tokens)
+    if not tokens:
+        return None
+    cmd, rest = os.path.basename(tokens[0]), tokens[1:]
+    if cmd == "xargs":
+        tool = _inplace_invocation(rest)
+        if tool:
+            return f"xargs {tool}"
+    if cmd == "find":
+        for flag in ("-exec", "-execdir"):
+            if flag in rest:
+                tool = _inplace_invocation(rest[rest.index(flag) + 1:])
+                if tool:
+                    return f"find {flag} {tool}".replace("-execdir", "-exec")
+    return None
+
+
+def batch_write_hints(command):
+    """Batch in-place writes whose targets only exist at run time
+    (`find -exec sed -i`, `xargs sed -i`). Statically unresolvable —
+    callers can warn, never block (spec §05)."""
+    command = _mask_heredocs(command)
+    found = []
+    for segment in _split_segments(command):
+        hint = _segment_batch_hint(_tokens(segment))
+        if hint and hint not in found:
+            found.append(hint)
+    return found
+
+
 def _segment_write_targets(tokens):
     if not tokens:
         return []
@@ -108,9 +156,7 @@ def _segment_write_targets(tokens):
     if cmd == "sudo" and rest:
         cmd, rest = os.path.basename(rest[0]), rest[1:]
     if cmd == "sed":
-        inplace = any(t == "--in-place" or t.startswith("--in-place=")
-                      or (t.startswith("-i") and not t.startswith("--")) for t in rest)
-        if not inplace:
+        if not any(_sed_inplace_flag(t) for t in rest):
             return []
         files = _positionals(rest, {"-e", "-f", "--expression", "--file"}, True)
         return [(f, INPLACE) for f in files]

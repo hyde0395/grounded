@@ -6,7 +6,7 @@
 
 No LLM in the loop. No network calls (for the core rule). Just hooks, a local ledger, and exit codes.
 
-![version](https://img.shields.io/badge/version-0.5.0-blue)
+![version](https://img.shields.io/badge/version-0.6.0-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![engine](https://img.shields.io/badge/judgment-deterministic%20%C2%B7%20no%20LLM-brightgreen)
 ![category](https://img.shields.io/badge/category-grounding%20enforcement-purple)
@@ -69,7 +69,7 @@ agent chasing the warning instead of the task.
 | Rule | What it enforces | Status |
 |---|---|---|
 | **G-1** Read-before-edit | A file can't be edited unless it was read this session (Read, Grep, `cat`, `git diff`/`git show` output) | ✅ v0.1 |
-| **G-1s** Shell-write gating | `sed -i`, `perl -i`, `tee`, `>`, `cp`/`mv` onto a never-read file → blocked; `>>` (append) → warning only | ✅ v0.2 |
+| **G-1s** Shell-write gating | `sed -i`, `perl -i`, `tee`, `>`, `cp`/`mv` onto a never-read file → blocked; `>>` (append) and batch writes with run-time targets (`find -exec sed -i`, `xargs sed -i`) → warning only | ✅ v0.2 |
 | **G-2** Verify-before-install | A package can't be installed unless it exists on its registry (npm / PyPI / crates.io) | ✅ v0.2 |
 | **G-3** Fetch-before-cite | Dead URLs (404/410/DNS failure) are blocked; ambiguous ones (403/5xx/timeout) only warn | ✅ v0.3 |
 | **freshness** Stale-read detection | A file that changed on disk *after* it was read → warning to re-read before relying on it | ✅ v0.5 |
@@ -87,7 +87,9 @@ name before installing.
 
 G-2 and G-3 lookups are cached in the session ledger (positive *and*
 negative), use a 2.5s timeout, and **never block on network trouble** — an
-unreachable registry is not evidence of hallucination. A cached re-check costs
+unreachable registry is not evidence of hallucination. Negative results
+expire after 10 minutes and get re-checked, so the package you published
+five minutes ago doesn't stay blocked for the whole session. A cached re-check costs
 ~50ms, and one command's lookups share a 5s total budget — past it, uncached
 targets are skipped (fail open) rather than stalling your tool call. G-3
 probes with HEAD only, skips private/localhost hosts (a dev server that isn't
@@ -181,7 +183,7 @@ recently formalized:
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests   # 173 tests, hooks exercised via real stdin/exit-code interface
+python3 -m unittest discover -s tests   # 203 tests, hooks exercised via real stdin/exit-code interface
 ```
 
 The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post_record.py`, `pre_gate.py`), pure logic (`verdict.py`, `shell_scan.py` — no I/O, no LLM), and side effects at the edges (`ledger_io.py`, `registry.py`, `urlcheck.py`). Network calls take an injectable opener, so the whole suite runs offline.

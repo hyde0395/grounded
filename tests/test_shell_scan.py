@@ -88,6 +88,40 @@ class WriteTargetsTest(unittest.TestCase):
                          [("f.txt", shell_scan.TRUNCATE)])
 
 
+class BatchWriteHintsTest(unittest.TestCase):
+    """find -exec / xargs feeding an in-place editor: targets are dynamic,
+    so they can't be gated — but they can be flagged."""
+
+    def hints(self, command):
+        return shell_scan.batch_write_hints(command)
+
+    def test_find_exec_sed_inplace(self):
+        self.assertEqual(self.hints("find . -name '*.py' -exec sed -i 's/a/b/' {} +"),
+                         ["find -exec sed -i"])
+
+    def test_xargs_sed_inplace(self):
+        self.assertEqual(self.hints("git ls-files | xargs sed -i 's/a/b/'"),
+                         ["xargs sed -i"])
+
+    def test_xargs_perl_inplace(self):
+        self.assertEqual(self.hints("ls *.txt | xargs perl -i -pe 's/a/b/'"),
+                         ["xargs perl -i"])
+
+    def test_xargs_without_inplace_tool_is_silent(self):
+        self.assertEqual(self.hints("git ls-files | xargs grep TODO"), [])
+        self.assertEqual(self.hints("ls | xargs sed 's/a/b/'"), [])
+
+    def test_find_without_exec_is_silent(self):
+        self.assertEqual(self.hints("find . -name '*.py'"), [])
+
+    def test_direct_sed_inplace_is_not_a_batch_hint(self):
+        # resolvable targets are write_targets' job, not a hint
+        self.assertEqual(self.hints("sed -i 's/a/b/' foo.py"), [])
+
+    def test_heredoc_body_is_inert(self):
+        self.assertEqual(self.hints("cat <<EOF\nxargs sed -i 's/a/b/'\nEOF"), [])
+
+
 class CopyMoveTest(unittest.TestCase):
     """cp/mv onto an existing file destroys content as surely as `>` does."""
 

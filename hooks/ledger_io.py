@@ -11,8 +11,12 @@ import tempfile
 
 try:
     import fcntl
-except ImportError:  # Windows: no fcntl — degrade to lock-free best effort
+except ImportError:
     fcntl = None
+try:
+    import msvcrt  # Windows region locks
+except ImportError:
+    msvcrt = None
 
 LEDGER_DIR = ".grounded"
 LEDGER_FILE = "ledger.json"
@@ -98,24 +102,40 @@ def save_ledger(cwd, ledger):
 
 @contextlib.contextmanager
 def _locked(cwd):
-    """Exclusive advisory lock; any failure degrades to running unlocked."""
-    if fcntl is None:
+    """Exclusive advisory lock; any failure degrades to running unlocked.
+
+    POSIX uses flock; Windows uses an msvcrt region lock on the first byte
+    (LK_LOCK retries ~10s, then raises — treated as running unlocked).
+    """
+    if fcntl is None and msvcrt is None:
         yield
         return
     lock_path = os.path.join(cwd, LEDGER_DIR, LOCK_FILE)
     try:
         os.makedirs(os.path.dirname(lock_path), exist_ok=True)
-        f = open(lock_path, "w")
+        f = open(lock_path, "a+")
     except OSError:
         yield
         return
+    win_locked = False
     try:
         try:
-            fcntl.flock(f, fcntl.LOCK_EX)
+            if fcntl is not None:
+                fcntl.flock(f, fcntl.LOCK_EX)
+            else:
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+                win_locked = True
         except OSError:
             pass
         yield
     finally:
+        if win_locked:
+            try:
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
         f.close()  # close releases the flock
 
 

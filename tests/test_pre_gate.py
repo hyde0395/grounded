@@ -215,6 +215,27 @@ class BashGateTest(unittest.TestCase):
         r = run_hook("pre_gate.py", bash_payload("echo x > a.txt", self.cwd))
         self.assertEqual(r.returncode, 2)
 
+    def test_xargs_sed_inplace_warns_once(self):
+        self.write_ledger()
+        cmd = "git ls-files | xargs sed -i 's/a/b/'"
+        first = run_hook("pre_gate.py", bash_payload(cmd, self.cwd))
+        self.assertEqual(first.returncode, 0)
+        ctx = json.loads(first.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("[grounded G-1]", ctx)
+        self.assertIn("xargs sed -i", ctx)
+        second = run_hook("pre_gate.py", bash_payload(cmd, self.cwd))
+        self.assertEqual(second.stdout, "")
+
+    def test_batch_hint_disabled_with_g1s(self):
+        d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(d, exist_ok=True)
+        self.write_ledger()
+        with open(os.path.join(d, "config.json"), "w") as f:
+            json.dump({"G-1s": False}, f)
+        r = run_hook("pre_gate.py",
+                     bash_payload("git ls-files | xargs sed -i 's/a/b/'", self.cwd))
+        self.assertEqual(r.stdout, "")
+
     def test_cp_onto_existing_unread_file_blocked(self):
         src = self.touch("new.py")
         dst = self.touch("main.py")

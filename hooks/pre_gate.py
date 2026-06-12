@@ -62,6 +62,31 @@ def _cacheable(status):
     return status is not None and (200 <= status < 400 or status in (404, 410, 0))
 
 
+# A negative verdict (404 URL, absent package) can go stale — a package
+# published five minutes ago is the canonical stuck false positive.
+NEGATIVE_TTL_SECONDS = 600
+
+
+def _cache_get(section, key):
+    """Cached value, honoring the [value, ts] negative-entry form.
+
+    Expired negatives read as a miss so they get re-checked; legacy plain
+    negatives (pre-TTL ledgers) stay valid for the session as before.
+    """
+    entry = section.get(key)
+    if isinstance(entry, list) and len(entry) == 2:
+        value, ts = entry
+        if isinstance(ts, (int, float)) \
+                and time.time() - ts > NEGATIVE_TTL_SECONDS:
+            return None
+        return value
+    return entry
+
+
+def _cache_put(section, key, value, negative):
+    section[key] = [value, int(time.time())] if negative else value
+
+
 def _gate_urls(urls, ledger, budget):
     """Verdicts for fetch targets; returns (stops, warn_pairs, dirty) where
     warn_pairs are (dedup_key, reason)."""
@@ -70,13 +95,14 @@ def _gate_urls(urls, ledger, budget):
         if not urlcheck.is_checkable(url):
             continue
         key = urlcheck.normalize_url(url)
-        status = ledger["verified_urls"].get(key)
+        status = _cache_get(ledger["verified_urls"], key)
         if status is None:
             if budget.exhausted():
                 continue  # unchecked ≠ dead — skip silently, fail open
             status = urlcheck.check_url(key)
             if _cacheable(status):
-                ledger["verified_urls"][key] = status
+                _cache_put(ledger["verified_urls"], key, status,
+                           negative=status in (404, 410, 0))
                 dirty = True
         v = verdict.gate_url(url, status)
         if v.decision == verdict.STOP:
@@ -160,6 +186,15 @@ def gate_bash(payload):
         elif v.decision == verdict.WARN:
             warn_pairs.append((_warn_key(v.reason, path, m), v.reason))
 
+    if cfg["g-1s"]:
+        for hint in shell_scan.batch_write_hints(command):
+            warn_pairs.append((f"g1s-batch:{hint}", (
+                f"[grounded G-1] This command performs a batch in-place write "
+                f"({hint}) whose targets are resolved at run time — grounded "
+                "cannot verify they were read. Make sure you have actually "
+                "seen the files this will modify."
+            )))
+
     if cfg["g-3"]:
         url_stops, url_warns, dirty = _gate_urls(shell_scan.fetch_urls(command),
                                                  ledger, budget)
@@ -169,13 +204,14 @@ def gate_bash(payload):
     package_specs = shell_scan.package_specs(command) if cfg["g-2"] else []
     for ecosystem, name in package_specs[:MAX_REGISTRY_LOOKUPS]:
         key = f"{ecosystem}:{name}"
-        exists = ledger["known_pkgs"].get(key)
+        exists = _cache_get(ledger["known_pkgs"], key)
         if exists is None:
             if budget.exhausted():
                 continue  # unchecked ≠ hallucinated — skip, fail open
             exists = registry.check_package(ecosystem, name)
             if exists is not None:  # only cache definitive answers
-                ledger["known_pkgs"][key] = exists
+                _cache_put(ledger["known_pkgs"], key, exists,
+                           negative=exists is False)
                 dirty = True
         v = verdict.gate_package(ecosystem, name, exists)
         if v.decision == verdict.STOP:

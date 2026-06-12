@@ -182,6 +182,18 @@ class PostRecordTest(unittest.TestCase):
         missing = [p for p in paths if p not in recorded]
         self.assertEqual(missing, [])
 
+    def test_update_ledger_works_without_any_lock_primitive(self):
+        # platforms with neither fcntl nor msvcrt degrade to lock-free
+        sys.path.insert(0, HOOKS_DIR)
+        import ledger_io
+        saved_fcntl, saved_msvcrt = ledger_io.fcntl, ledger_io.msvcrt
+        ledger_io.fcntl = ledger_io.msvcrt = None
+        try:
+            ledger_io.update_ledger(self.cwd, lambda l: l["read_files"].update({"/x": 1}))
+        finally:
+            ledger_io.fcntl, ledger_io.msvcrt = saved_fcntl, saved_msvcrt
+        self.assertEqual(self.read_files(), {"/x": 1})
+
     def test_corrupt_ledger_is_healed_not_crashed(self):
         os.makedirs(os.path.dirname(self.ledger), exist_ok=True)
         with open(self.ledger, "w") as f:
