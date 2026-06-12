@@ -125,6 +125,7 @@ We'd rather tell you up front than have you find out:
 - **Text responses are invisible to hooks.** If the agent pastes a link or a claim as plain chat text without using a tool, no hook fires. That's a structural limit of hooks; a bundled prompt rule (roadmap v0.4) only partially mitigates it.
 - **Recent Claude Code already covers the simplest G-1 case.** Claude Code's built-in validation rejects `Edit` on a never-read file by itself. grounded's G-1 is defense-in-depth there — its own value is the evidence ledger (it counts `cat`/`grep` as reads, tracks freshness, and powers the rules the built-in check doesn't have: shell-level write bypasses, G-2, G-3).
 - **Bot walls cause false signals.** Cloudflare answering `curl` with 403 doesn't mean the link is dead — which is exactly why G-3 warns instead of blocks on 403.
+- **grounded is not an adversarial boundary.** Shell-write gating catches the common idioms (`sed -i`, `tee`, redirections) — the lazy path, not the evasive one. A model that deliberately hides a write behind `python -c` or base64 isn't being sloppy, it's evading a guardrail; that's a security problem, and the answer is sandboxing and permissions — the layer grounded explicitly complements, not replaces.
 - **What we promise:** grounding enforcement at the tool boundary. **What we don't:** catching every hallucination.
 
 ## Development
