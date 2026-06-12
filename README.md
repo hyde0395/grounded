@@ -6,7 +6,7 @@
 
 No LLM in the loop. No network calls (for the core rule). Just hooks, a local ledger, and exit codes.
 
-![version](https://img.shields.io/badge/version-0.6.0-blue)
+![version](https://img.shields.io/badge/version-0.6.1-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![engine](https://img.shields.io/badge/judgment-deterministic%20%C2%B7%20no%20LLM-brightgreen)
 ![category](https://img.shields.io/badge/category-grounding%20enforcement-purple)
