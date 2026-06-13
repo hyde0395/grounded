@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>grounded — 프로젝트 최종 보고서</title>
+<style>
+  :root{
+    --void:#0d0f14;
+    --panel:#14171f;
+    --panel-2:#1a1e28;
+    --line:#2a2f3a;
+    --line-bright:#3a414f;
+    --ink:#e8eaed;
+    --ink-dim:#9aa3b2;
+    --ink-faint:#646c7a;
+    --pass:#4ade80;
+    --warn:#fbbf24;
+    --stop:#f43f5e;
+    --wire:#5b8def;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono","Cascadia Code",Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--void);color:var(--ink);font-family:var(--mono);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:0 28px}
+
+  header.hero{padding:64px 0 44px;border-bottom:1px solid var(--line)}
+  .kicker{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:24px}
+  h1{font-size:clamp(34px,6vw,58px);font-weight:800;letter-spacing:-.04em;line-height:1.02;margin-bottom:18px}
+  h1 .em{color:var(--pass)}
+  .lede{font-size:clamp(15px,2vw,18px);color:var(--ink-dim);max-width:680px}
+  .lede b{color:var(--ink)}
+
+  .meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-top:36px;border-radius:8px;overflow:hidden}
+  .meta div{background:var(--panel);padding:13px 16px}
+  .meta dt{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:5px}
+  .meta dd{font-size:13px;font-weight:600;color:var(--ink)}
+
+  section{padding:52px 0;border-bottom:1px solid var(--line)}
+  .sec-no{font-size:11px;letter-spacing:.25em;color:var(--ink-faint);margin-bottom:10px}
+  h2{font-size:clamp(22px,3.4vw,30px);font-weight:700;letter-spacing:-.02em;margin-bottom:22px}
+  h3{font-size:16px;font-weight:700;margin:30px 0 12px;color:var(--ink)}
+  p{color:var(--ink-dim);font-size:14px;margin-bottom:14px;max-width:760px}
+  p b,li b{color:var(--ink)}
+  ul,ol{margin:0 0 16px 22px;color:var(--ink-dim);font-size:14px}
+  li{margin-bottom:8px}
+  code{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:12.5px;color:var(--ink)}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;font-size:12.5px;line-height:1.7;overflow-x:auto;margin:0 0 18px;color:var(--ink-dim)}
+  pre b{color:var(--ink)}
+  a{color:var(--wire);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  table{width:100%;border-collapse:collapse;margin:0 0 20px;font-size:13px}
+  th{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-bright)}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--ink-dim);vertical-align:top}
+  td b{color:var(--ink)}
+
+  .tag{display:inline-block;padding:2px 9px;border-radius:4px;font-size:11px;font-weight:700}
+  .tag.pass{background:rgba(74,222,128,.12);color:var(--pass);border:1px solid rgba(74,222,128,.3)}
+  .tag.warn{background:rgba(251,191,36,.12);color:var(--warn);border:1px solid rgba(251,191,36,.3)}
+  .tag.stop{background:rgba(244,63,94,.12);color:var(--stop);border:1px solid rgba(244,63,94,.3)}
+  .tag.wire{background:rgba(91,141,239,.12);color:var(--wire);border:1px solid rgba(91,141,239,.3)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin-bottom:16px}
+  .card h4{font-size:14px;font-weight:700;margin-bottom:10px;color:var(--ink)}
+  .card .row{display:flex;gap:10px;margin-bottom:7px;font-size:13px}
+  .card .row .k{flex:0 0 64px;color:var(--ink-faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding-top:2px}
+  .card .row .v{color:var(--ink-dim)}
+  .card .row .v b{color:var(--ink)}
+
+  .timeline{border-left:2px solid var(--line-bright);margin:8px 0 8px 6px;padding-left:22px}
+  .tl{position:relative;margin-bottom:20px}
+  .tl::before{content:"";position:absolute;left:-28px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--wire)}
+  .tl .when{font-size:11px;letter-spacing:.12em;color:var(--ink-faint);text-transform:uppercase}
+  .tl .what{font-size:14px;color:var(--ink);font-weight:600;margin:3px 0}
+  .tl .why{font-size:13px;color:var(--ink-dim)}
+
+  footer{padding:40px 0 64px;color:var(--ink-faint);font-size:12px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">grounded · final project report · v0.6.1</div>
+    <h1>근거 없으면,<br><span class="em">실행도 없다</span></h1>
+    <p class="lede">AI 코딩 에이전트가 <b>검증하지 않은 것에 근거해 행동</b>하려 할 때 — 안 읽은 파일 수정, 환각 패키지 설치, 죽은 링크 인용 — Claude Code hook으로 <b>결정론적으로(LLM 없이) 차단</b>하는 가드레일. 이 문서는 설계가 어떻게 바뀌었고, 무엇에 부딪혔고, 최종적으로 무엇이 되었는지의 기록이다.</p>
+    <dl class="meta">
+      <div><dt>기간</dt><dd>2026.06.11 – 06.13</dd></div>
+      <div><dt>최종 버전</dt><dd>v0.6.1 (릴리스)</dd></div>
+      <div><dt>테스트</dt><dd>210개 · 전부 오프라인</dd></div>
+      <div><dt>의존성</dt><dd>Python stdlib only</dd></div>
+      <div><dt>라이선스</dt><dd>MIT</dd></div>
+      <div><dt>출시 형태</dt><dd>Claude Code 플러그인</dd></div>
+    </dl>
+  </div>
+</header>
+
+<section id="overview">
+  <div class="wrap">
+    <div class="sec-no">§01</div>
+    <h2>무엇을 만들었나</h2>
+    <p>기존 가드레일은 전부 <b>"이 명령이 위험한가?"</b>를 묻는다(<code>rm -rf</code>, force push, 시크릿 유출). grounded는 다른 질문을 묻는다 — <b>"이 행동에 근거가 있는가?"</b> 보안 도구가 아니라 <b>근거 강제(grounding enforcement)</b> 도구이며, 보안 가드레일의 대체재가 아닌 보완재다.</p>
+    <p>핵심 통찰: CLAUDE.md에 "추측하지 마라"라고 쓰는 것은 모델이 런타임에 해석하는 <b>제안</b>이고, 모델은 설득당한다. hook은 모델의 생각과 무관하게 무조건 실행되는 <b>강제</b>다. 근거 없는 행동은 강제로만 막힌다.</p>
+    <table>
+      <tr><th>규칙</th><th>강제 내용</th><th>도입</th></tr>
+      <tr><td><b>G-1</b> 읽기 선행</td><td>이 세션에서 읽지 않은 파일은 Edit/Write 불가. 근거원: Read · Grep(단일 파일) · <code>cat</code> · <code>git diff/show</code> 출력 · 과거 성공한 쓰기</td><td>v0.1</td></tr>
+      <tr><td><b>G-1s</b> 셸 쓰기 검문</td><td><code>sed -i</code> · <code>perl -i</code> · <code>tee</code> · <code>&gt;</code> · 미독 파일 위로의 <code>cp/mv</code> → 차단. <code>&gt;&gt;</code>(append)와 런타임 결정 대상(<code>find -exec</code>, <code>xargs</code>)은 경고만</td><td>v0.2</td></tr>
+      <tr><td><b>G-2</b> 존재 확인</td><td>npm / PyPI / crates.io에 실존하지 않는 패키지는 설치 불가</td><td>v0.2</td></tr>
+      <tr><td><b>G-3</b> 링크 실존</td><td>404/410/DNS 실패 URL 차단 · 403/5xx/타임아웃은 봇차단 가능성이 있어 경고만</td><td>v0.3</td></tr>
+      <tr><td><b>freshness</b> 신선도</td><td>읽은 뒤 디스크에서 변경된 파일에 의존하면 "다시 읽어라" 경고</td><td>v0.5</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="timeline">
+  <div class="wrap">
+    <div class="sec-no">§02</div>
+    <h2>타임라인</h2>
+    <div class="timeline">
+      <div class="tl"><div class="when">06.11 밤</div><div class="what">설계 명세 v0.1 + 명세 검증</div><div class="why">핵심 기술 주장(PreToolUse exit 2 차단, hook 무상태, stdin JSON)을 공식 문서와 전수 대조. ledger I/O · SessionStart · PostToolUse · PreToolUse 코어 구현.</div></div>
+      <div class="tl"><div class="when">06.12 오전</div><div class="what">v0.2 → v0.4</div><div class="why">shell_scan(셸 쓰기 대상 + 설치 스펙 파싱), registry 조회(G-2), urlcheck(G-3), 마켓플레이스 패키징 + Windows 런처, SessionStart 프롬프트 룰 주입.</div></div>
+      <div class="tl"><div class="when">06.12 오후</div><div class="what">v0.5.0 → v0.6.0</div><div class="why">freshness · 규칙별 토글 · 경고 멱등화 · 근거원 확대 · fcntl 잠금 · 네트워크 예산(v0.5.0). 배치 쓰기 경고 · 부정 캐시 TTL · Windows 잠금(v0.6.0). E2E 및 플러그인 모드 라이브 검증 통과.</div></div>
+      <div class="tl"><div class="when">06.12 저녁</div><div class="what">ledger 앵커 버그 수정 + 데모 GIF</div><div class="why">payload cwd 표류로 ledger가 하위 디렉터리에 흩어지던 버그를 프로젝트 루트 고정으로 해결. 실제 세션 무각본 녹화로 데모 GIF 제작.</div></div>
+      <div class="tl"><div class="when">06.13</div><div class="what">v0.6.1 릴리스 · 홍보 국면 진입</div><div class="why">awesome 리스트 제출, Show HN/레딧 초안, 관련 이슈 댓글 초안, 이 보고서.</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="changes">
+  <div class="wrap">
+    <div class="sec-no">§03</div>
+    <h2>원래 설계에서 바뀐 것들</h2>
+    <p>명세(<a href="grounded-spec.html">grounded-spec.html</a>)는 단일 진실 공급원이었지만, 구현과 라이브 검증이 설계를 다섯 군데에서 고쳐 썼다.</p>
+
+    <h3>1. G-1의 존재 이유가 재정의됐다 — 가장 큰 설계 수정</h3>
+    <p>E2E 검증에서 <b>Claude Code 내장 read-before-edit 검증이 PreToolUse hook보다 먼저 발화</b>한다는 사실을 발견했다(미독 파일 Edit 시 hook이 아예 안 탐). 즉 G-1의 원래 주력 시나리오는 내장 가드와 중복이었다. G-1의 가치는 재정의됐다: ① 내장 가드가 모르는 근거(<code>cat</code>/<code>grep</code>/<code>git diff</code>) 인정 ② freshness 같은 정밀 규칙의 기반 ③ 내장 가드가 전혀 안 다루는 <b>셸 우회(G-1s)</b>. 차별화의 본체는 G-2 · G-3 · G-1s로 이동했고, README 포지셔닝에 그대로 반영했다.</p>
+
+    <h3>2. 경고는 한 번만 — 멱등화 (설계에 없던 규칙)</h3>
+    <p>원설계의 WARN은 매번 주입이었다. 사용자 피드백("경고 주입이 컨텍스트를 오염시킨다")으로, 반복 경고가 문제 악화처럼 읽혀 모델이 과업 대신 경고를 쫓을 수 있다는 우려가 제기됐다. ledger <code>warned</code> 섹션에 (규칙:대상) 키로 <b>세션당 1회만</b> 주입하고, 모든 경고 뒤에 "advisory · 반복 안 됨 · 지우려고 재시도 금지" 안내를 붙이는 것으로 설계를 바꿨다.</p>
+
+    <h3>3. ledger는 세션별이 아니라 cwd당 하나</h3>
+    <p>resume 시 session_id가 바뀌면 근거가 증발해 오탐(잘못된 차단)이 난다. 철학이 "오탐 &lt; 누락"이므로 동시 세션 교차 오염(누락)을 감수하고 cwd당 단일 ledger로 결정했다. 같은 이유로 SessionStart의 <code>source</code>가 <code>resume</code>/<code>compact</code>면 ledger를 유지한다 — 대화가 기억하는 근거를 날리면 안 된다.</p>
+
+    <h3>4. 명세가 경고한 "플러그인 hook 버그"는 재현되지 않았다</h3>
+    <p>명세는 "플러그인 command hook이 차단을 무시한 버그 이력"을 경고했으나 출처가 확인되지 않았다. 대응책(개발은 settings.json 직접 등록 + exit 2 self-test 우선)은 비용이 낮아 그대로 따랐고, 출시 전 플러그인 모드 라이브 검증으로 Claude Code 2.1.x + macOS에서 exit 2 차단이 정상 동작함을 확인한 뒤 출시했다. <b>미검증 주장도 대응 비용이 낮으면 따르되, 출시 전 반드시 실측한다</b>는 원칙의 사례.</p>
+
+    <h3>5. 로드맵에 없던 것들이 운영에서 태어났다</h3>
+    <ul>
+      <li><b>freshness 규칙</b> — "읽었다"는 과거형이다. 읽은 뒤 디스크에서 바뀐 파일은 근거가 아니다 (v0.5).</li>
+      <li><b>규칙별 토글</b> — <code>.grounded/config.json</code> + <code>GROUNDED_DISABLE</code> env. 오탐을 겪은 사용자가 전체 삭제 대신 규칙 하나만 끌 수 있게 (v0.5).</li>
+      <li><b>부정 캐시 TTL 10분</b> — 5분 전에 publish된 패키지가 세션 내내 차단되던 문제 (v0.6).</li>
+      <li><b>네트워크 총량 예산 5초</b> — 조회가 겹치면 최악 ~20초 지연이 가능했다. 예산 초과 시 미캐시 조회는 스킵(fail-open) (v0.5).</li>
+    </ul>
+  </div>
+</section>
+
+<section id="trials">
+  <div class="wrap">
+    <div class="sec-no">§04</div>
+    <h2>시행착오 — 부딪힌 순서대로</h2>
+
+    <div class="card">
+      <h4>① 병렬 hook이 서로의 적립을 지운다 <span class="tag stop">라이브 관측</span></h4>
+      <div class="row"><div class="k">증상</div><div class="v">병렬 Read 4개 중 <b>3개의 근거 적립이 유실</b>되는 것을 라이브로 직접 관측. 드문 경합이 아니라 병렬 도구 호출에서 일상적으로 발생.</div></div>
+      <div class="row"><div class="k">원인</div><div class="v">hook은 독립 프로세스. load → modify → save가 잠금 없이 겹치면 마지막 저장만 살아남는다.</div></div>
+      <div class="row"><div class="k">해결</div><div class="v"><code>update_ledger</code> RMW를 fcntl 잠금으로 감쌈. Windows는 msvcrt 영역 잠금, 둘 다 없으면 무잠금 강등. pre_gate의 캐시 저장은 전체 스냅샷 대신 <code>verified_urls/known_pkgs/warned</code>만 병합하는 <code>_save_caches</code>로 — 동시 적립을 덮어쓰지 않게.</div></div>
+    </div>
+
+    <div class="card">
+      <h4>② 내장 가드 중복 발견 <span class="tag wire">E2E 검증</span></h4>
+      <div class="row"><div class="k">증상</div><div class="v">미독 파일 Edit 시 pre_gate가 발화하지 않음(마커 부재). Claude Code 내장 read-before-edit가 먼저 거부하고 있었다.</div></div>
+      <div class="row"><div class="k">교훈</div><div class="v">출시 직전에야 주력 기능이 중복임을 알았다면 포지셔닝이 무너졌을 것. <b>차별 가치를 실측으로 확인하고 정직하게 재배치</b>(§03-1). 데모와 카피도 G-2 · sed -i 우회 중심으로 다시 짰다.</div></div>
+    </div>
+
+    <div class="card">
+      <h4>③ truncate로 만든 파일을 차단하는 오탐 <span class="tag warn">오탐 수정</span></h4>
+      <div class="row"><div class="k">증상</div><div class="v"><code>echo "..." &gt; new.txt</code>로 모델이 직접 만든 파일을 이어서 수정하려 하면 "안 읽었다"고 차단.</div></div>
+      <div class="row"><div class="k">원인</div><div class="v">셸 truncate 쓰기는 Edit/Write 성공 적립 경로를 타지 않았다.</div></div>
+      <div class="row"><div class="k">해결</div><div class="v">truncate(<code>&gt;</code>)로 만든 파일은 모델이 전체 내용의 author이므로 근거로 적립. 단 append(<code>&gt;&gt;</code>)와 <code>sed -i</code>는 부분 수정이라 적립하지 않음 — 전체 내용을 안다고 볼 수 없다.</div></div>
+    </div>
+
+    <div class="card">
+      <h4>④ heredoc 본문이 파서를 속인다 <span class="tag warn">파싱</span></h4>
+      <div class="row"><div class="k">증상</div><div class="v"><code>cat &lt;&lt;EOF &gt; f</code>의 heredoc <b>본문 안 텍스트</b>(예: 문서 속 <code>sed -i</code> 예시)가 쓰기 대상/설치 스펙으로 오인.</div></div>
+      <div class="row"><div class="k">해결</div><div class="v"><code>_mask_heredocs</code>로 본문을 마스킹하고 개행을 세그먼트 분리자에 추가. 정적으로 못 푸는 대상(변수·치환·인용)은 원래부터 통과 — 파서의 한계는 fail-open으로 흡수.</div></div>
+    </div>
+
+    <div class="card">
+      <h4>⑤ ledger가 cwd를 따라 표류 <span class="tag stop">v0.6.1 픽스</span></h4>
+      <div class="row"><div class="k">증상</div><div class="v">셸 <code>cd</code> 후 hook payload의 cwd가 바뀌면서 <code>.grounded/ledger.json</code>이 하위 디렉터리들에 흩어짐 — 한쪽에 적립된 근거가 다른 쪽 검문에 안 보임.</div></div>
+      <div class="row"><div class="k">해결</div><div class="v">ledger 경로를 payload cwd가 아닌 프로젝트 루트에 고정. 출시 태그(v0.6.0) 이후 발견되어 v0.6.1로 즉시 릴리스.</div></div>
+    </div>
+
+    <div class="card">
+      <h4>⑥ 방금 publish한 패키지가 계속 차단됨 <span class="tag warn">캐시 정책</span></h4>
+      <div class="row"><div class="k">증상</div><div class="v">G-2 부정 결과(404)를 세션 내내 캐싱 → 사용자가 5분 전 올린 새 패키지가 끝까지 "미존재" 판정.</div></div>
+      <div class="row"><div class="k">해결</div><div class="v">부정 캐시에만 10분 TTL. 긍정 캐시는 유지(존재하던 패키지가 사라지는 일은 드물다). 네트워크 불명(None)은 애초에 캐싱하지 않아 일시 장애가 자가 치유.</div></div>
+    </div>
+
+    <div class="card">
+      <h4>⑦ 봇 차단을 죽은 링크로 오판 <span class="tag warn">설계 단계에서 예방</span></h4>
+      <div class="row"><div class="k">증상</div><div class="v">Cloudflare가 curl을 403으로 막으면 멀쩡한 링크가 "죽은 링크"가 된다.</div></div>
+      <div class="row"><div class="k">해결</div><div class="v">G-3는 <b>명백한 죽음(404/410/DNS 실패)만 차단</b>, 403/5xx/타임아웃은 경고. HEAD 거부(405/501)는 GET 재시도, <code>curl -X POST</code>/<code>--data</code>는 검사 자체를 스킵(API 엔드포인트는 HEAD를 정당하게 거부), 사설/로컬 호스트 제외(아직 안 띄운 dev 서버는 정상).</div></div>
+    </div>
+
+    <div class="card">
+      <h4>⑧ 자기 자신에게 차단당하다 <span class="tag pass">도그푸딩</span></h4>
+      <div class="row"><div class="k">증상</div><div class="v">개발 세션에서 버전 범프를 위해 <code>sed -i</code>를 안 읽은 manifest에 실행 → grounded G-1이 개발자(AI)를 차단.</div></div>
+      <div class="row"><div class="k">교훈</div><div class="v">차단 메시지대로 파일을 읽고 재시도하니 통과. 강제 루프(차단 → 이유 피드백 → 근거 확보 → 통과)가 실전에서 의도대로 동작한다는 가장 값싼 증거였다.</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="algorithm">
+  <div class="wrap">
+    <div class="sec-no">§05</div>
+    <h2>최종 알고리즘</h2>
+
+    <h3>아키텍처 — 적립과 검문의 분리</h3>
+    <p>hook은 호출마다 독립 프로세스(무상태)이므로 상태는 전부 외부 ledger에 있다. <b>PostToolUse가 적립하고, PreToolUse가 검문한다.</b></p>
+    <pre>
+도구 실행됨 (Read / Grep / cat / WebFetch) ──▶ <b>post_record</b> ── 적립 ──▶ .grounded/ledger.json
+                                                                  { read_files:    {path: ts},
+                                                                    verified_urls: {url: status},
+                                                                    known_pkgs:    {eco:name: bool|[bool,ts]},
+                                                                    warned:        {rule:target: ts} }
+행동 시도 (Edit / Write / Bash / WebFetch) ──▶ <b>pre_gate</b> ── 조회 ──▶ 판정
+    PASS → exit 0 조용히 통과
+    WARN → exit 0 + additionalContext로 경고 1회 주입
+    STOP → exit 2 + stderr 이유가 모델에 피드백 → 모델이 근거 확보 후 재시도</pre>
+
+    <h3>판정 모델 — 오탐은 누락보다 나쁘다</h3>
+    <p>모든 규칙은 세 판정으로 수렴한다. 확신이 없으면 차단이 아니라 경고. 내부 오류는 전부 fail-open: ledger 손상 → 통과, 네트워크 불명 → 통과, 파싱 불가 → 통과. <b>차단은 근거의 부재가 명백할 때만.</b></p>
+    <table>
+      <tr><th>판정</th><th>조건</th><th>동작</th></tr>
+      <tr><td><span class="tag pass">PASS</span></td><td>근거가 ledger에 있음</td><td>exit 0, 무음</td></tr>
+      <tr><td><span class="tag warn">WARN</span></td><td>근거 불확실 (403 · 타임아웃 · append · 런타임 결정 대상)</td><td>exit 0 + 경고 주입 (세션당 규칙:대상별 1회)</td></tr>
+      <tr><td><span class="tag stop">STOP</span></td><td>근거가 명백히 없음 (미독 · 404 · 레지스트리 미존재)</td><td>exit 2 + 행동 가능한 이유 피드백</td></tr>
+    </table>
+
+    <h3>G-1 / G-1s — 파일 쓰기 검문 (의사코드)</h3>
+    <pre>
+gate_file_action(path, ledger, mtime):
+    if not exists(path):              return PASS      <i># 새 파일 생성은 읽을 수 없다</i>
+    if path not in ledger.read_files: return STOP      <i># 근거 없음</i>
+    if mtime &gt; read_ts + 1s:          return WARN      <i># freshness: 읽은 뒤 바뀜 → 다시 읽어라</i>
+    return PASS
+
+gate_shell_write(path, mode, ...):                     <i># Bash 명령에서 shell_scan으로 추출</i>
+    mode INPLACE(sed -i, perl -i, tee) | TRUNCATE(&gt;) on unread existing file → STOP
+    mode APPEND(&gt;&gt;, tee -a) on unread file             → WARN
+    cp/mv onto unread existing file                    → STOP
+    find -exec / xargs (대상이 런타임 결정)             → WARN (세션당 1회)
+    변수·치환·인용으로 정적 해석 불가                    → PASS (fail-open)</pre>
+
+    <h3>G-2 — 패키지 존재 확인</h3>
+    <pre>
+for (eco, name) in package_specs(command)[:5]:         <i># pip/uv/npm/pnpm/yarn/cargo 파싱, 명령당 5개</i>
+    cached = ledger.known_pkgs[eco:name]               <i># 부정 캐시는 10분 TTL</i>
+    exists = cached if fresh else registry.check(eco, name, timeout=2.5s, budget=5s/command)
+    True  → PASS (캐시)   False → STOP "registry에 없음 — 이름을 검색해 확인하라" (캐시)
+    None  → PASS 무음 (네트워크 불명은 환각의 증거가 아니다 · 캐싱 안 함)</pre>
+
+    <h3>G-3 — URL 생존 확인</h3>
+    <pre>
+for url in fetch_urls(command)[:3] | WebFetch.url:     <i># POST/--data는 스킵, 사설호스트 스킵</i>
+    status = HEAD(url) retry GET on 405/501            <i># fragment 정규화</i>
+    2xx/3xx → PASS   404/410/DNS(0) → STOP   403/5xx/timeout → WARN (봇차단일 수 있다)
+    확정 결과만 캐싱 — 모호한 결과는 자가 치유를 위해 비캐싱</pre>
+
+    <h3>경고 멱등화</h3>
+    <pre>
+_claim_warns(ledger, warns):
+    key = rule:target                                  <i># freshness는 rule:path:int(mtime) — 새 변경엔 재경고</i>
+    이미 warned에 있으면 드롭, 없으면 기록 후 주입
+    주입 시 말미에 1줄: "advisory · 이 세션에서 반복되지 않음 · 지우려고 재시도하지 마라"
+    STOP과 동시 발생 시 경고는 claim하지 않음            <i># 차단 해소 후 전달 기회 보존</i></pre>
+
+    <h3>모듈 구성 — 순수 로직과 부수효과의 분리</h3>
+    <table>
+      <tr><th>모듈</th><th>역할</th><th>I/O</th></tr>
+      <tr><td><code>verdict.py</code></td><td>순수 판정 함수 (gate_file_action / gate_shell_write / gate_package / gate_url)</td><td>없음</td></tr>
+      <tr><td><code>shell_scan.py</code></td><td>순수 파싱 — 쓰기 대상 · 설치 스펙 · fetch URL 추출 (인용 마스킹 → 세그먼트 분할 → shlex)</td><td>없음</td></tr>
+      <tr><td><code>ledger_io.py</code></td><td>상태 — 원자적 저장, fcntl/msvcrt 잠금 RMW, 경로 정규화(realpath+expanduser)</td><td>파일</td></tr>
+      <tr><td><code>registry.py</code> / <code>urlcheck.py</code></td><td>네트워크 — opener 주입식 (테스트는 fake opener로 전부 오프라인)</td><td>HTTP</td></tr>
+      <tr><td><code>session_start.py</code> / <code>post_record.py</code> / <code>pre_gate.py</code></td><td>thin entrypoint — stdin JSON 수신, 모듈 조립, exit code 결정</td><td>stdin/exit</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="references">
+  <div class="wrap">
+    <div class="sec-no">§06</div>
+    <h2>참고 문헌 · 기술 근거</h2>
+
+    <h3>연구 문헌</h3>
+    <ul>
+      <li>Spracklen, J., Wijewickrama, R., Sakib, A.H.M.N., Maiti, A., Viswanath, B., Jadliwala, M. — <a href="https://arxiv.org/abs/2406.10279">"We Have a Package for You! A Comprehensive Analysis of Package Hallucinations by Code Generating LLMs"</a>, USENIX Security 2025. <b>G-2의 동기</b>: 576,000개 생성 샘플에서 LLM 추천 패키지의 5.2–21.7%(고유 이름 205,474개)가 실존하지 않음을 측정 — "slopsquatting" 공격면.</li>
+      <li><a href="https://arxiv.org/abs/2503.18666">"AgentSpec: Customizable Runtime Enforcement for Safe and Reliable LLM Agents"</a>, ICSE 2026. 에이전트 안전을 모델 밖의 <b>런타임 강제</b>(trigger → predicate → enforcement)로 정식화. grounded는 이 모델을 Claude Code hook 경계에 특화한 형태(matcher → ledger 판정 → exit code).</li>
+      <li><a href="https://arxiv.org/abs/2503.18813">"Defeating Prompt Injections by Design (CaMeL)"</a>, Google DeepMind. LLM을 <b>신뢰 불가 구성요소</b>로 두고 결정론적 계층이 통제권을 갖는 설계 스탠스. CaMeL은 프롬프트 주입에, grounded는 근거 없는 행동에 같은 스탠스를 적용.</li>
+    </ul>
+
+    <h3>기술 문서 (구현 전 전수 검증)</h3>
+    <ul>
+      <li><a href="https://code.claude.com/docs/en/hooks">Claude Code Hooks 공식 문서</a> — 핵심 주장 검증: PreToolUse <code>exit 2</code> = 도구 차단 + stderr 모델 피드백 ✓ · PostToolUse exit 2는 차단 불가(이미 실행됨) ✓ · hook은 호출마다 독립 프로세스 ✓ · tool_input은 stdin JSON ✓. 이 검증이 외부 ledger 설계의 정당성 근거.</li>
+      <li>레지스트리 API — npm <code>registry.npmjs.org/{name}</code> · PyPI <code>pypi.org/simple/{name}/</code> · crates.io <code>crates.io/api/v1/crates/{name}</code> (UA 헤더 필수). 전부 실조회 라이브 검증.</li>
+      <li><a href="https://en.wikipedia.org/wiki/Slopsquatting">Slopsquatting</a> — 환각 패키지명을 선점 등록하는 공급망 공격의 명명.</li>
+    </ul>
+
+    <h3>수요의 실증 (독립적으로 같은 문제를 제기한 열린 이슈)</h3>
+    <ul>
+      <li><a href="https://github.com/anomalyco/opencode/issues/27901">opencode #27901</a> — edit 도구의 read-before-edit가 설명문에만 있고 런타임 강제가 없음을 발견, 강제 옵션 요청. "설명문은 제안, 강제는 코드"라는 본 프로젝트의 핵심 명제와 동일.</li>
+      <li><a href="https://github.com/anthropics/claude-code/issues/65982">claude-code #65982</a> — "검증 행동이 선행됐는지 확인하는 게이트" 기능 요청. grounded가 도구 경계에서 하는 것의 텍스트 단언 버전.</li>
+      <li><a href="https://github.com/QwenLM/qwen-code/issues/4939">qwen-code #4939</a> — grep을 read-before-edit 근거로 인정해달라는 요청. grounded의 근거원 확대 결정과 독립 수렴.</li>
+    </ul>
+
+    <h3>영구 제외 (만들지 않기로 한 것)</h3>
+    <ul>
+      <li>LLM 기반 문장 단위 사실 검증 — 판정에 LLM을 넣는 순간 결정론이 깨진다. 이 프로젝트의 정체성과 모순.</li>
+      <li>대시보드 · 통계 · 텔레메트리 — 가드레일은 조용해야 한다.</li>
+    </ul>
+
+    <h3>정직한 한계 (약속하지 않는 것)</h3>
+    <p>도구 경계의 행동에만 근거를 강제한다. 모델이 도구 없이 채팅 텍스트로 주장을 뱉으면 어떤 hook도 보지 못한다(SessionStart 프롬프트 룰 주입으로 부분 완화만). 흔한 쓰기 관용구를 탐지하되 적대적 우회는 탐지 경계 밖이다. <b>모든 환각의 차단을 약속하지 않는다 — 근거 없는 행동의 차단을 약속한다.</b></p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    grounded v0.6.1 · 2026-06-13 · <a href="https://github.com/hyde0395/grounded">github.com/hyde0395/grounded</a> · 설계 명세: <a href="grounded-spec.html">grounded-spec.html</a>
+  </div>
+</footer>
+
+</body>
+</html>
