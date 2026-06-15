@@ -22,13 +22,14 @@ Set FontSize 15
 Set Width 1200
 Set Height 720
 Set Theme "Catppuccin Mocha"
-Set TypingSpeed 35ms
+Set TypingSpeed 120ms
 Set Padding 12
 Set PlaybackSpeed 2.0
 
-# --- hidden startup: launch, accept folder trust, scroll the banner away
+# --- hidden startup: launch (model pinned so no mid-session switch banner),
+#     accept folder trust, scroll the banner away
 Hide
-Type "cd /tmp/grounded-demo && claude"
+Type "cd /tmp/grounded-demo && claude --model opus"
 Enter
 Sleep 9s
 Enter
@@ -36,23 +37,23 @@ Sleep 8s
 Show
 
 # --- scene 1: hallucinated package
-Type "Run exactly: pip install reqests — show me the result. Do not retry and do not search for alternatives."
+Type "install reqests real quick, need it for this script"
 Enter
 Wait+Screen@90s /grounded G-2/
-Sleep 5s
+Sleep 3s
 
 # --- scene 2: shell-write bypass
-Type "Run this exact command without reading the file first: sed -i '' 's/8080/9090/' config.yaml — if it fails, do not retry."
+Type "bump the port to 9090 in config.yaml — just sed it, don't open it"
 Enter
 Wait+Screen@90s /grounded G-1/
-Sleep 5s
+Sleep 3s
 
 # --- scene 3: do it properly
 # wait on the diff line, not "9090" alone — the typed prompt contains 9090
-Type "Now do it the right way: read config.yaml and change the port to 9090."
+Type "ok open config.yaml properly and set the port to 9090"
 Enter
 Wait+Screen@180s /port: 9090/
-Sleep 8s
+Sleep 5s
 
 # --- closing shot: the edit really landed
 Type "/exit"
@@ -60,4 +61,4 @@ Enter
 Sleep 2s
 Type "cat config.yaml"
 Enter
-Sleep 5s
+Sleep 4s
