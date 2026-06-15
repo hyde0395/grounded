@@ -231,6 +231,8 @@ The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post
 | v0.3 ✅ | G-3 URL liveness (block 404·DNS-dead / warn 403·5xx) for WebFetch + curl/wget | citing dead links |
 | v0.4 ✅ | marketplace plugin packaging, Windows support (`python3`/`python` launcher), bundled prompt rule for plain-text claims | install friction, text blind spot (partial) |
 | v0.5 ✅ | freshness — detect external edits after read, per-rule on/off config, more evidence sources (`git diff`/`git show`, Grep content output), hardening (heredoc-aware parsing, ledger lock, 5s network budget) | acting on stale evidence, false positives on indirect reads |
+| v0.6.0 ✅ | batch-write warnings (`find -exec`/`xargs sed -i`), `cp`/`mv` overwrite gating, negative-cache 10-min TTL (re-check published packages), Windows ledger lock (`msvcrt`) | unverified batch writes, stale negative cache, lost accruals on Windows |
+| v0.6.1 ✅ | ledger anchored to project root (cwd-drift fix), demo GIF, network-access disclosure + 60-second verification | mis-anchored ledger when cwd ≠ project root |
 
 ## License
 
