@@ -81,8 +81,10 @@ def load_config(cwd, env=None):
 
 
 def default_ledger():
+    # compacted_at: unix ts of the last compaction (0 = none). Reads recorded
+    # before it may have been evicted from the model's context window.
     return {"read_files": {}, "verified_urls": {}, "known_pkgs": {},
-            "warned": {}}
+            "warned": {}, "compacted_at": 0}
 
 
 def ledger_path(cwd):
@@ -102,8 +104,12 @@ def load_ledger(cwd):
         return None
     merged = default_ledger()
     for key in merged:
-        if isinstance(data.get(key), dict):
-            merged[key] = data[key]
+        val = data.get(key)
+        if isinstance(merged[key], dict):
+            if isinstance(val, dict):
+                merged[key] = val
+        elif isinstance(val, (int, float)) and not isinstance(val, bool):
+            merged[key] = val  # scalar sections (e.g. compacted_at)
     return merged
 
 

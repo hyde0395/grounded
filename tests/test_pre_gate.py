@@ -94,6 +94,19 @@ class PreGateTest(unittest.TestCase):
         r = run_hook("pre_gate.py", payload("Edit", p, self.cwd))
         self.assertIn("changed", r.stdout)
 
+    def test_edit_read_before_compaction_warns(self):
+        p = self.touch("a.py")
+        os.utime(p, (100, 100))  # mtime == read ts, so NOT stale on disk
+        d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "ledger.json"), "w") as f:
+            json.dump({"read_files": {p: 100}, "verified_urls": {},
+                       "known_pkgs": {}, "warned": {}, "compacted_at": 150}, f)
+        r = run_hook("pre_gate.py", payload("Edit", p, self.cwd))
+        self.assertEqual(r.returncode, 0)
+        ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("compact", ctx)
+
     def test_missing_ledger_blocks_edit(self):
         p = self.touch("a.py")
         r = run_hook("pre_gate.py", payload("Edit", p, self.cwd))

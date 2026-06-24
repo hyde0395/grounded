@@ -21,12 +21,25 @@ Verdict = namedtuple("Verdict", ["decision", "reason"])
 REGISTRY_LABELS = {"npm": "npm registry", "pypi": "PyPI", "crates": "crates.io"}
 
 
-def _stale_verdict(path, read_files, mtime):
-    """WARN if the file changed on disk after it was read; None otherwise."""
+def _stale_verdict(path, read_files, mtime, compacted_at=0):
+    """WARN if the recorded read can no longer be trusted; None otherwise.
+
+    Two independent causes, both advisory (never block):
+    - the read predates a compaction, so the content may have been evicted
+      from context even though the ledger still records it;
+    - the file changed on disk after it was read.
+    """
     ts = read_files.get(path)
-    if mtime is None or not isinstance(ts, (int, float)):
+    if not isinstance(ts, (int, float)):
         return None  # unknown state is not evidence of staleness — fail open
-    if mtime <= ts + FRESHNESS_SLACK:
+    if compacted_at and ts < compacted_at:
+        return Verdict(
+            WARN,
+            f"[grounded freshness] {path} was read before this session was "
+            "compacted, so the content may have dropped out of context. "
+            "Proceeding, but re-read the file before relying on it.",
+        )
+    if mtime is None or mtime <= ts + FRESHNESS_SLACK:
         return None
     return Verdict(
         WARN,
@@ -36,17 +49,19 @@ def _stale_verdict(path, read_files, mtime):
     )
 
 
-def gate_file_action(tool_name, path, file_exists, read_files, mtime=None):
+def gate_file_action(tool_name, path, file_exists, read_files, mtime=None,
+                     compacted_at=0):
     """G-1: a file may only be edited if it was read this session.
 
     `path` must already be normalized; `read_files` is the ledger section
     mapping normalized paths to read timestamps. `mtime` (optional) enables
-    the freshness check: a read invalidated by a later on-disk change warns.
+    the on-disk freshness check; `compacted_at` (optional) enables the
+    compaction-staleness check — both only warn, never block.
     """
     if tool_name == "Write" and not file_exists:
         return Verdict(PASS, "creating a new file needs no prior read")
     if path in read_files:
-        return _stale_verdict(path, read_files, mtime) \
+        return _stale_verdict(path, read_files, mtime, compacted_at) \
             or Verdict(PASS, "file was read this session")
     return Verdict(
         STOP,
@@ -56,7 +71,8 @@ def gate_file_action(tool_name, path, file_exists, read_files, mtime=None):
     )
 
 
-def gate_shell_write(path, mode, file_exists, read_files, mtime=None):
+def gate_shell_write(path, mode, file_exists, read_files, mtime=None,
+                     compacted_at=0):
     """G-1 for shell-mediated writes (sed -i, tee, redirections).
 
     Truncating or rewriting a file never seen destroys content blindly →
@@ -65,7 +81,7 @@ def gate_shell_write(path, mode, file_exists, read_files, mtime=None):
     if not file_exists:
         return Verdict(PASS, "creating a new file needs no prior read")
     if path in read_files:
-        return _stale_verdict(path, read_files, mtime) \
+        return _stale_verdict(path, read_files, mtime, compacted_at) \
             or Verdict(PASS, "file was read this session")
     if mode == "append":
         return Verdict(

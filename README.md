@@ -6,7 +6,7 @@
 
 No LLM in the loop. No network calls (for the core rule). Just hooks, a local ledger, and exit codes.
 
-![version](https://img.shields.io/badge/version-0.6.1-blue)
+![version](https://img.shields.io/badge/version-0.6.2-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![engine](https://img.shields.io/badge/judgment-deterministic%20%C2%B7%20no%20LLM-brightgreen)
 ![category](https://img.shields.io/badge/category-grounding%20enforcement-purple)
@@ -233,6 +233,7 @@ The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post
 | v0.5 ✅ | freshness — detect external edits after read, per-rule on/off config, more evidence sources (`git diff`/`git show`, Grep content output), hardening (heredoc-aware parsing, ledger lock, 5s network budget) | acting on stale evidence, false positives on indirect reads |
 | v0.6.0 ✅ | batch-write warnings (`find -exec`/`xargs sed -i`), `cp`/`mv` overwrite gating, negative-cache 10-min TTL (re-check published packages), Windows ledger lock (`msvcrt`) | unverified batch writes, stale negative cache, lost accruals on Windows |
 | v0.6.1 ✅ | ledger anchored to project root (cwd-drift fix), demo GIF, network-access disclosure + 60-second verification | mis-anchored ledger when cwd ≠ project root |
+| v0.6.2 ✅ | compaction-aware staleness — warn before editing a file whose read predates a context compaction, plus a published ledger-schema reference | acting on reads evicted from context by compaction |
 
 ## License
 

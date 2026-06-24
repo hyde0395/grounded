@@ -10,6 +10,7 @@ so the rule asks the model to verify before asserting in text.
 """
 import json
 import sys
+import time
 
 import ledger_io
 
@@ -34,6 +35,12 @@ def main():
         ledger = ledger_io.load_ledger(root)  # None if corrupt
     if ledger is None:
         ledger = ledger_io.default_ledger()
+    if source == "compact":
+        # Compaction summarizes the transcript, so file content read earlier
+        # may no longer be in context even though the ledger still records it.
+        # Stamp the time so a later edit of a pre-compaction read warns to
+        # re-read (resume restores the conversation, so it is left untouched).
+        ledger["compacted_at"] = int(time.time())
     ledger_io.save_ledger(root, ledger)
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "SessionStart",

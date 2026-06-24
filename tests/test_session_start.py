@@ -35,7 +35,20 @@ class SessionStartTest(unittest.TestCase):
         r = run_hook("session_start.py", payload(self.cwd, "startup"))
         self.assertEqual(r.returncode, 0)
         self.assertEqual(self.read_ledger(), {"read_files": {}, "verified_urls": {},
-                                              "known_pkgs": {}, "warned": {}})
+                                              "known_pkgs": {}, "warned": {},
+                                              "compacted_at": 0})
+
+    def test_compact_marks_compacted_at_and_keeps_reads(self):
+        self.seed_ledger({"/kept/file.py": 1})
+        run_hook("session_start.py", payload(self.cwd, "compact"))
+        led = self.read_ledger()
+        self.assertEqual(led["read_files"], {"/kept/file.py": 1})
+        self.assertGreater(led["compacted_at"], 0)
+
+    def test_resume_does_not_mark_compacted_at(self):
+        self.seed_ledger({"/kept/file.py": 1})
+        run_hook("session_start.py", payload(self.cwd, "resume"))
+        self.assertEqual(self.read_ledger().get("compacted_at", 0), 0)
 
     def test_startup_resets_existing_ledger(self):
         self.seed_ledger({"/old/file.py": 1})

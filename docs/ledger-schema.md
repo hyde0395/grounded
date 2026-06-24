@@ -19,13 +19,16 @@ to do it, not the way.**
   "read_files":    { "<abs-path>": <unix-ts-int> },
   "verified_urls": { "<normalized-url>": <status-int | [status, ts]> },
   "known_pkgs":    { "<ecosystem>:<name>": <bool | [bool, ts]> },
-  "warned":        { "<warn-key>": <unix-ts-int> }
+  "warned":        { "<warn-key>": <unix-ts-int> },
+  "compacted_at":  <unix-ts-int | 0>
 }
 ```
 
-Four maps in one JSON object. `read_files` is G-1 evidence (read-before-write),
-`verified_urls` is G-3 (link liveness), `known_pkgs` is G-2 (package
-existence), `warned` is once-per-session warning dedup. Negative cache entries
+Four maps plus a scalar, in one JSON object. `read_files` is G-1 evidence
+(read-before-write), `verified_urls` is G-3 (link liveness), `known_pkgs` is
+G-2 (package existence), `warned` is once-per-session warning dedup, and
+`compacted_at` records the last compaction so reads taken before it can be
+flagged as possibly evicted from the model's context. Negative cache entries
 (404 URLs, absent packages) are wrapped as `[value, ts]` with a TTL; everything
 else is a plain value. Each section is documented in full below — but the rest
 of this page is mostly *why* it's shaped this way, which matters more than the
@@ -83,13 +86,16 @@ value (this is fine — newer evidence supersedes older for the same target).
   "read_files":    { "<abs-path>": <unix-ts-int> },
   "verified_urls": { "<normalized-url>": <status> },
   "known_pkgs":    { "<ecosystem>:<name>": <bool-or-[bool,ts]> },
-  "warned":        { "<warn-key>": <unix-ts-int> }
+  "warned":        { "<warn-key>": <unix-ts-int> },
+  "compacted_at":  <unix-ts-int>
 }
 ```
 
-`default_ledger()` produces all four keys empty. When loading, each section is
-defensively merged onto that default, so an older ledger missing `warned`
-(it was added in v0.5) still loads — the missing section just reads as empty.
+`default_ledger()` produces all five keys (maps empty, `compacted_at` 0). When
+loading, each section is defensively merged onto that default — dict sections by
+key, the scalar `compacted_at` if numeric — so an older ledger missing `warned`
+(added in v0.5) or `compacted_at` (added in v0.6.2) still loads, with the
+missing piece reading as empty/0.
 
 ### `read_files` — G-1 evidence (read-before-write)
 
@@ -176,6 +182,22 @@ The key encodes the warning so the dedup is precise:
 - `g1s-batch:<hint>` — batch in-place write whose targets are dynamic
   (`xargs sed -i`, `find -exec sed -i`).
 - `g3:<normalized-url>` — an ambiguous (un-verifiable) URL.
+
+### `compacted_at` — compaction-staleness marker
+
+```json
+"compacted_at": 1782092400
+```
+
+A scalar, not a map: the unix timestamp of the last compaction (`0` = none).
+Set only when SessionStart fires with `source == "compact"` — the one lifecycle
+event that summarizes the transcript, so file content read earlier may no longer
+be in the model's context even though `read_files` still records it. When a
+later edit targets a file whose recorded read predates `compacted_at`, the gate
+emits a WARN (re-read advisory), never a block. `resume` is deliberately left
+untouched: it restores the conversation, so the content is presumed intact. This
+is a partial mitigation only — hooks cannot see the context window, so it keys
+off the *event*, not the actual eviction.
 
 ---
 
@@ -273,23 +295,23 @@ Corruption handling differs by reader, and on purpose:
 
 ## Test matrix
 
-210 test methods, all offline (network code is exercised through injected fake
+219 test methods, all offline (network code is exercised through injected fake
 openers, never the real internet — several methods loop over multiple cases, so
 the asserted-case count is higher). Run with
-`python3 -m unittest discover -s tests` → `Ran 210 tests … OK`. By area:
+`python3 -m unittest discover -s tests` → `Ran 219 tests … OK`. By area:
 
 | File | Count | What it pins down |
 |---|--:|---|
-| `test_verdict.py` | 22 | Pure decisions: unread→STOP, read→PASS, new-file Write→PASS, freshness slack/stale→WARN, shell truncate/inplace→STOP vs append→WARN, URL alive/dead/ambiguous, package exists/absent/unknown. |
+| `test_verdict.py` | 28 | Pure decisions: unread→STOP, read→PASS, new-file Write→PASS, freshness slack/stale→WARN, compaction-staleness (read before vs after compaction)→WARN/PASS, shell truncate/inplace→STOP vs append→WARN, URL alive/dead/ambiguous, package exists/absent/unknown. |
 | `test_shell_scan.py` | 67 | Command parsing: `sed -i`/`perl -i`/`tee`/redirect targets & modes, `cp`/`mv` overwrite (+ `-n`/`-t` bail-outs), batch hints (`xargs`/`find -exec`), install specs across pip/uv/npm/pnpm/yarn/cargo, fetch-URL extraction (GET only, POST skipped), heredoc/quote masking, segment splitting & dedup. |
-| `test_pre_gate.py` | 37 | The gate end-to-end: edit/Write of unread vs read file (exit 2 vs 0), missing ledger blocks, corrupt ledger fails open, garbage stdin fails open, stale→WARN via `additionalContext` (+ dedup), shell `sed -i`/truncate→block, append→warn, `cp` onto existing→block, cached absent-package→block & alive→pass without network, `WebFetch`/`curl` to cached dead URL→block, localhost not checked. |
+| `test_pre_gate.py` | 38 | The gate end-to-end: edit/Write of unread vs read file (exit 2 vs 0), missing ledger blocks, corrupt ledger fails open, garbage stdin fails open, stale→WARN via `additionalContext` (+ dedup), read-before-compaction→WARN, shell `sed -i`/truncate→block, append→warn, `cp` onto existing→block, cached absent-package→block & alive→pass without network, `WebFetch`/`curl` to cached dead URL→block, localhost not checked. |
 | `test_config.py` | 14 | Per-rule toggles via `.grounded/config.json` + `GROUNDED_DISABLE` env (case/underscore-insensitive, env overrides file, unknown names ignored, corrupt config fails open) and end-to-end that disabled rules stop gating/recording. |
 | `test_post_record.py` | 23 | Accrual: Read/Grep-single-file/Write record; Grep-on-dir, blind append, `cp` dest, `sed -i` record nothing; truncate write & `git diff`/`git show` post-image paths record; **parallel 12-recorder no-loss test**; lock-free degradation; corrupt-ledger heal. |
 | `test_urlcheck.py` | 15 | Liveness: 200/404/410/403 statuses, DNS→0, refused/timeout→None, HEAD→GET retry on 405, private/loopback hosts not checkable, fragment stripping. |
 | `test_registry.py` | 8 | Existence tri-state: 200→True, 404/410→False, 403/network/timeout→None, scoped-npm URL-quoting, unknown ecosystem→None. |
 | `test_cache.py` | 7 | Negative-cache TTL: fresh negative served, expired negative is a miss & re-checks (URL revival un-blocks), legacy plain negatives served, positives stored plain. |
 | `test_root.py` | 7 | Root anchoring: `$CLAUDE_PROJECT_DIR` wins, walk-up to `.grounded/`, fallback to cwd, bogus env ignored; edits/reads from a subdir cwd still see/accrue into the root ledger. |
-| `test_session_start.py` | 7 | Lifecycle: startup/clear reset, resume keeps, resume+corrupt heals to empty, prompt-rule injection, garbage stdin exits 0. |
+| `test_session_start.py` | 9 | Lifecycle: startup/clear reset, resume keeps, resume+corrupt heals to empty, compact marks `compacted_at` while keeping reads, resume does not mark it, prompt-rule injection, garbage stdin exits 0. |
 | `test_budget.py` | 3 | Network budget: exhausted budget skips uncached lookups, cached dead URL still blocks after deadline, fresh budget performs the lookup. |
 
 ---

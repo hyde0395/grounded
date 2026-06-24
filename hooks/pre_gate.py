@@ -148,9 +148,10 @@ def gate_file_tool(payload):
     if ledger is None:
         return 0  # corrupt ledger: fail open rather than false-block
     m = _mtime(path) if cfg["freshness"] else None
+    ca = ledger.get("compacted_at", 0) if cfg["freshness"] else 0
     v = verdict.gate_file_action(
         payload.get("tool_name"), path, os.path.exists(path),
-        ledger["read_files"], mtime=m,
+        ledger["read_files"], mtime=m, compacted_at=ca,
     )
     if v.decision == verdict.STOP and cfg["g-1"]:
         return _emit([v.reason], [])
@@ -175,6 +176,7 @@ def gate_bash(payload):
     stops, warn_pairs, dirty = [], [], False
     budget = _Budget()
 
+    ca = ledger.get("compacted_at", 0) if cfg["freshness"] else 0
     write_targets = shell_scan.write_targets(command) if cfg["g-1s"] else []
     for raw, mode in write_targets:
         path = ledger_io.normalize(raw, cwd)
@@ -182,7 +184,8 @@ def gate_bash(payload):
             continue  # cp/mv into a directory: actual file target unresolved
         m = _mtime(path) if cfg["freshness"] else None
         v = verdict.gate_shell_write(path, mode, os.path.exists(path),
-                                     ledger["read_files"], mtime=m)
+                                     ledger["read_files"], mtime=m,
+                                     compacted_at=ca)
         if v.decision == verdict.STOP:
             stops.append(v.reason)
         elif v.decision == verdict.WARN:

@@ -131,5 +131,47 @@ class GatePackageTest(unittest.TestCase):
         self.assertEqual(v.decision, verdict.PASS)
 
 
+class CompactionStalenessTest(unittest.TestCase):
+    """A file read before a compaction may have been evicted from context,
+    so the ledger still says 'read' while the model no longer holds it."""
+
+    def test_read_before_compaction_is_warn(self):
+        v = verdict.gate_file_action("Edit", "/p/a.py", file_exists=True,
+                                     read_files={"/p/a.py": 100}, compacted_at=150)
+        self.assertEqual(v.decision, verdict.WARN)
+        self.assertIn("compact", v.reason)
+        self.assertIn("/p/a.py", v.reason)
+
+    def test_read_after_compaction_is_pass(self):
+        v = verdict.gate_file_action("Edit", "/p/a.py", file_exists=True,
+                                     read_files={"/p/a.py": 200}, compacted_at=150)
+        self.assertEqual(v.decision, verdict.PASS)
+
+    def test_no_compaction_is_pass(self):
+        v = verdict.gate_file_action("Edit", "/p/a.py", file_exists=True,
+                                     read_files={"/p/a.py": 100}, compacted_at=0)
+        self.assertEqual(v.decision, verdict.PASS)
+
+    def test_unread_file_still_stops_regardless_of_compaction(self):
+        v = verdict.gate_file_action("Edit", "/p/a.py", file_exists=True,
+                                     read_files={}, compacted_at=150)
+        self.assertEqual(v.decision, verdict.STOP)
+
+    def test_shell_write_read_before_compaction_is_warn(self):
+        v = verdict.gate_shell_write("/p/a.py", "truncate", file_exists=True,
+                                     read_files={"/p/a.py": 100}, compacted_at=150)
+        self.assertEqual(v.decision, verdict.WARN)
+        self.assertIn("compact", v.reason)
+
+    def test_compaction_warn_even_when_mtime_is_fresh(self):
+        # mtime says nothing changed on disk, but the read predates the
+        # compaction, so the in-context copy may be gone → still warn
+        v = verdict.gate_file_action("Edit", "/p/a.py", file_exists=True,
+                                     read_files={"/p/a.py": 100}, mtime=100,
+                                     compacted_at=150)
+        self.assertEqual(v.decision, verdict.WARN)
+        self.assertIn("compact", v.reason)
+
+
 if __name__ == "__main__":
     unittest.main()
