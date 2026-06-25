@@ -102,19 +102,50 @@ def extract_paths(tool_name, tool_input, tool_response, cwd, grep_evidence=True)
                 if m and os.path.isfile(ledger_io.normalize(m.group(1), cwd)):
                     raw.append(m.group(1))
     elif tool_name == "Bash":
-        command = tool_input.get("command") or ""
-        raw.extend(read_targets(command, cwd))
-        # A truncating write (`>`/tee) succeeded: the model authored the file's
-        # entire current content. Appends and sed -i still leave content unseen.
-        raw.extend(t for t, mode in shell_scan.write_targets(command)
-                   if mode == shell_scan.TRUNCATE)
-        if GIT_SEGMENT.search(command):
-            # git prints paths relative to the repo root; resolving against
-            # cwd is only right when they coincide, so isfile() must confirm
-            for m in GIT_DIFF_HEADER.finditer(_response_text(tool_response)):
-                if os.path.isfile(ledger_io.normalize(m.group(1), cwd)):
-                    raw.append(m.group(1))
+        return _bash_paths(tool_input, tool_response, cwd)
     return [ledger_io.normalize(p, cwd) for p in raw]
+
+
+def _effective_cwd(command, cwd):
+    """cwd adjusted for a leading `cd <dir>`, so `cd sub && cat a` reads sub/a."""
+    cd = shell_scan.leading_cd(command)
+    if not cd:
+        return cwd
+    cd = os.path.expanduser(cd)
+    return cd if os.path.isabs(cd) else os.path.join(cwd, cd)
+
+
+def _git_root(start):
+    """Nearest ancestor (start included) holding a .git, else start.
+
+    git diff/show print paths relative to the repo root, which is not the cwd
+    when the command runs from a subdirectory."""
+    probe = os.path.realpath(start)
+    while True:
+        if os.path.isdir(os.path.join(probe, ".git")):
+            return probe
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            return start
+        probe = parent
+
+
+def _bash_paths(tool_input, tool_response, cwd):
+    command = tool_input.get("command") or ""
+    base = _effective_cwd(command, cwd)
+    out = [ledger_io.normalize(t, base) for t in read_targets(command, base)]
+    # A truncating write (`>`/tee) succeeded: the model authored the file's
+    # entire current content. Appends and sed -i still leave content unseen.
+    out.extend(ledger_io.normalize(t, base)
+               for t, mode in shell_scan.write_targets(command)
+               if mode == shell_scan.TRUNCATE)
+    if GIT_SEGMENT.search(command):
+        git_base = _git_root(base)
+        for m in GIT_DIFF_HEADER.finditer(_response_text(tool_response)):
+            p = ledger_io.normalize(m.group(1), git_base)
+            if os.path.isfile(p):  # resolving may still miss; never mis-accrue
+                out.append(p)
+    return out
 
 
 def main():

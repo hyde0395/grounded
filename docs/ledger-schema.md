@@ -178,6 +178,9 @@ The key encodes the warning so the dedup is precise:
 
 - `freshness:<path>:<int(mtime)>` — keyed to the *specific* on-disk change, so
   a genuinely new change to the same file warns again.
+- `compaction:<path>:<compacted_at>` — read evicted by a context compaction.
+  Keyed to the compaction, not the mtime, so a *second* compaction re-warns a
+  file that is unchanged on disk (its content may have been dropped again).
 - `g1s-append:<path>` — blind append to an unread file.
 - `g1s-batch:<hint>` — batch in-place write whose targets are dynamic
   (`xargs sed -i`, `find -exec sed -i`).
@@ -295,20 +298,20 @@ Corruption handling differs by reader, and on purpose:
 
 ## Test matrix
 
-219 test methods, all offline (network code is exercised through injected fake
+275 test methods, all offline (network code is exercised through injected fake
 openers, never the real internet — several methods loop over multiple cases, so
 the asserted-case count is higher). Run with
-`python3 -m unittest discover -s tests` → `Ran 219 tests … OK`. By area:
+`python3 -m unittest discover -s tests` → `Ran 275 tests … OK`. By area:
 
 | File | Count | What it pins down |
 |---|--:|---|
 | `test_verdict.py` | 28 | Pure decisions: unread→STOP, read→PASS, new-file Write→PASS, freshness slack/stale→WARN, compaction-staleness (read before vs after compaction)→WARN/PASS, shell truncate/inplace→STOP vs append→WARN, URL alive/dead/ambiguous, package exists/absent/unknown. |
-| `test_shell_scan.py` | 67 | Command parsing: `sed -i`/`perl -i`/`tee`/redirect targets & modes, `cp`/`mv` overwrite (+ `-n`/`-t` bail-outs), batch hints (`xargs`/`find -exec`), install specs across pip/uv/npm/pnpm/yarn/cargo, fetch-URL extraction (GET only, POST skipped), heredoc/quote masking, segment splitting & dedup. |
-| `test_pre_gate.py` | 38 | The gate end-to-end: edit/Write of unread vs read file (exit 2 vs 0), missing ledger blocks, corrupt ledger fails open, garbage stdin fails open, stale→WARN via `additionalContext` (+ dedup), read-before-compaction→WARN, shell `sed -i`/truncate→block, append→warn, `cp` onto existing→block, cached absent-package→block & alive→pass without network, `WebFetch`/`curl` to cached dead URL→block, localhost not checked. |
+| `test_shell_scan.py` | 102 | Command parsing: `sed -i`/`perl -i`/`awk -i inplace`/`tee`/redirect (`>`,`>\|`)/`dd of=`/`truncate` targets & modes, `cp`/`mv` overwrite (+ `-n`/`-t` bail-outs), batch hints (`xargs`/`find -exec`), install specs across pip/uv/poetry/npm/pnpm/yarn/bun/cargo/gem/bundler/composer (+ custom-index skip), leading-`cd` resolution, fetch-URL extraction (GET only, POST skipped), heredoc/quote masking, segment splitting & dedup. |
+| `test_pre_gate.py` | 41 | The gate end-to-end: edit/Write of unread vs read file (exit 2 vs 0), missing ledger blocks, corrupt ledger fails open, garbage stdin fails open, stale→WARN via `additionalContext` (+ dedup), read-before-compaction→WARN (re-warns on a *second* compaction), shell `sed -i`/truncate→block, append→warn, `cp` onto existing→block, cached absent-package→block & alive→pass without network, `WebFetch`/`curl` to cached dead URL→block, localhost not checked. |
 | `test_config.py` | 14 | Per-rule toggles via `.grounded/config.json` + `GROUNDED_DISABLE` env (case/underscore-insensitive, env overrides file, unknown names ignored, corrupt config fails open) and end-to-end that disabled rules stop gating/recording. |
-| `test_post_record.py` | 23 | Accrual: Read/Grep-single-file/Write record; Grep-on-dir, blind append, `cp` dest, `sed -i` record nothing; truncate write & `git diff`/`git show` post-image paths record; **parallel 12-recorder no-loss test**; lock-free degradation; corrupt-ledger heal. |
-| `test_urlcheck.py` | 15 | Liveness: 200/404/410/403 statuses, DNS→0, refused/timeout→None, HEAD→GET retry on 405, private/loopback hosts not checkable, fragment stripping. |
-| `test_registry.py` | 8 | Existence tri-state: 200→True, 404/410→False, 403/network/timeout→None, scoped-npm URL-quoting, unknown ecosystem→None. |
+| `test_post_record.py` | 34 | Accrual: Read/Grep-single-file/Write record; shell viewers (`cat`/`less`/`head`/`tail`/`bat`/`view`/`sed -n`) record, leading-`cd` resolves relative reads; Grep-on-dir, blind append, `cp` dest, `sed -i` record nothing; truncate write & `git diff`/`git show` post-image paths (resolved against repo root) record; **parallel 12-recorder no-loss test**; lock-free degradation; corrupt-ledger heal. |
+| `test_urlcheck.py` | 18 | Liveness: 200/404/410/403 statuses, DNS→0, refused/timeout→None, HEAD→GET retry on 405/403, private/loopback/link-local/metadata hosts not checkable, fragment stripping. |
+| `test_registry.py` | 12 | Existence tri-state across npm/PyPI/crates/RubyGems/Packagist: 200→True, 404/410→False, 403/network/timeout→None, scoped-npm URL-quoting, Packagist vendor-slash preserved, unknown ecosystem→None. |
 | `test_cache.py` | 7 | Negative-cache TTL: fresh negative served, expired negative is a miss & re-checks (URL revival un-blocks), legacy plain negatives served, positives stored plain. |
 | `test_root.py` | 7 | Root anchoring: `$CLAUDE_PROJECT_DIR` wins, walk-up to `.grounded/`, fallback to cwd, bogus env ignored; edits/reads from a subdir cwd still see/accrue into the root ledger. |
 | `test_session_start.py` | 9 | Lifecycle: startup/clear reset, resume keeps, resume+corrupt heals to empty, compact marks `compacted_at` while keeping reads, resume does not mark it, prompt-rule injection, garbage stdin exits 0. |

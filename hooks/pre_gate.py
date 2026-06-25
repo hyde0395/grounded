@@ -129,9 +129,14 @@ def _claim_warns(ledger, warn_pairs):
     return fresh
 
 
-def _warn_key(reason, path, mtime):
+def _warn_key(reason, path, mtime, compacted_at=0):
     if reason.startswith("[grounded freshness]"):
-        # keyed to the change itself: a *new* on-disk change warns anew
+        # Compaction-staleness keys on the compaction, not the mtime: a file
+        # untouched on disk but evicted by a *second* compaction must warn
+        # anew (otherwise the first mtime-key claim silences it forever).
+        if "compact" in reason:
+            return f"compaction:{path}:{int(compacted_at or 0)}"
+        # on-disk freshness keys to the change itself: a new change warns anew
         return f"freshness:{path}:{int(mtime or 0)}"
     return f"g1s-append:{path}"
 
@@ -160,7 +165,7 @@ def gate_file_tool(payload):
         return _emit([v.reason], [])
     warns = []
     if v.decision == verdict.WARN:
-        warns = _claim_warns(ledger, [(_warn_key(v.reason, path, m), v.reason)])
+        warns = _claim_warns(ledger, [(_warn_key(v.reason, path, m, ca), v.reason)])
         if warns:
             _save_caches(root, ledger)
     return _emit([], warns)
@@ -192,7 +197,7 @@ def gate_bash(payload):
         if v.decision == verdict.STOP:
             stops.append(v.reason)
         elif v.decision == verdict.WARN:
-            warn_pairs.append((_warn_key(v.reason, path, m), v.reason))
+            warn_pairs.append((_warn_key(v.reason, path, m, ca), v.reason))
 
     if cfg["g-1s"]:
         for hint in shell_scan.batch_write_hints(command):

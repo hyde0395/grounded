@@ -107,6 +107,36 @@ class PreGateTest(unittest.TestCase):
         ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("compact", ctx)
 
+    def test_second_compaction_rewarns_unchanged_file(self):
+        # a later compaction evicts the file again; the dedup must key on the
+        # compaction, not the (unchanged) mtime, or the re-read prompt is lost
+        p = self.touch("a.py")
+        os.utime(p, (100, 100))
+        d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "ledger.json"), "w") as f:
+            json.dump({"read_files": {p: 100}, "verified_urls": {},
+                       "known_pkgs": {}, "warned": {f"freshness:{p}:100": 160},
+                       "compacted_at": 250}, f)
+        r = run_hook("pre_gate.py", payload("Edit", p, self.cwd))
+        self.assertEqual(r.returncode, 0)
+        ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("compact", ctx)
+
+    def test_same_compaction_does_not_rewarn(self):
+        # within one compaction the warning is still once-per-session
+        p = self.touch("a.py")
+        os.utime(p, (100, 100))
+        d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "ledger.json"), "w") as f:
+            json.dump({"read_files": {p: 100}, "verified_urls": {},
+                       "known_pkgs": {}, "warned": {f"compaction:{p}:250": 260},
+                       "compacted_at": 250}, f)
+        r = run_hook("pre_gate.py", payload("Edit", p, self.cwd))
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout, "")
+
     def test_missing_ledger_blocks_edit(self):
         p = self.touch("a.py")
         r = run_hook("pre_gate.py", payload("Edit", p, self.cwd))

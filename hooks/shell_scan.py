@@ -456,6 +456,23 @@ def fetch_urls(command):
     return result
 
 
+def leading_cd(command):
+    """Directory named by a leading `cd <dir>` (the `cd x && …` idiom), else
+    None. Conservative: exactly one literal arg, nothing statically
+    unresolvable — so callers can reparent relative paths in the command."""
+    command = _mask_heredocs(command)
+    segments = _split_segments(command)
+    if not segments:
+        return None
+    toks = _strip_prefixes(_tokens(segments[0]))
+    if len(toks) != 2 or os.path.basename(toks[0]) != "cd":
+        return None
+    target = toks[1]
+    if target.startswith("-") or (_UNRESOLVABLE & set(target)):
+        return None
+    return target
+
+
 def package_specs(command):
     """[(ecosystem, name)] this command installs, order-preserving dedup."""
     command = _mask_heredocs(command)

@@ -170,6 +170,33 @@ class PostRecordTest(unittest.TestCase):
             tool_response={"stdout": stdout, "stderr": ""}))
         self.assertIn(p, self.read_files())
 
+    def test_cd_prefix_resolves_relative_read(self):
+        # `cd sub && cat foo.py` reads sub/foo.py, not cwd/foo.py
+        sub = os.path.join(self.cwd, "sub")
+        os.makedirs(sub)
+        p = os.path.join(sub, "foo.py")
+        with open(p, "w") as f:
+            f.write("x")
+        run_hook("post_record.py",
+                 payload("Bash", {"command": "cd sub && cat foo.py"}, self.cwd))
+        self.assertIn(p, self.read_files())
+
+    def test_git_diff_header_resolves_against_repo_root(self):
+        # git prints repo-root-relative paths; when run from a subdir they must
+        # resolve against the root, not the cwd
+        os.makedirs(os.path.join(self.cwd, ".git"))
+        os.makedirs(os.path.dirname(self.ledger))  # anchor root at self.cwd
+        sub = os.path.join(self.cwd, "sub")
+        os.makedirs(sub)
+        p = os.path.join(self.cwd, "x.py")
+        with open(p, "w") as f:
+            f.write("x")
+        stdout = "diff --git a/x.py b/x.py\n--- a/x.py\n+++ b/x.py\n"
+        run_hook("post_record.py", payload(
+            "Bash", {"command": "git diff"}, sub,
+            tool_response={"stdout": stdout, "stderr": ""}))
+        self.assertIn(p, self.read_files())
+
     def test_diff_headers_from_non_git_command_not_grounded(self):
         # cat-ing a patch file shows diff text but is not `git diff` output
         self.touch("a.py")

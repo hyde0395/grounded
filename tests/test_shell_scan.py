@@ -7,6 +7,32 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import shell_scan  # noqa: E402
 
 
+class LeadingCdTest(unittest.TestCase):
+    def test_absolute_dir(self):
+        self.assertEqual(shell_scan.leading_cd("cd /proj && cat a.py"), "/proj")
+
+    def test_relative_dir(self):
+        self.assertEqual(shell_scan.leading_cd("cd sub && cat a.py"), "sub")
+
+    def test_semicolon_separator(self):
+        self.assertEqual(shell_scan.leading_cd("cd sub; cat a.py"), "sub")
+
+    def test_no_cd_returns_none(self):
+        self.assertIsNone(shell_scan.leading_cd("cat a.py"))
+
+    def test_bare_cd_returns_none(self):
+        self.assertIsNone(shell_scan.leading_cd("cd && cat a.py"))
+
+    def test_unresolvable_dir_returns_none(self):
+        # a variable/substitution target can't be resolved statically
+        self.assertIsNone(shell_scan.leading_cd("cd $HOME && cat a.py"))
+        self.assertIsNone(shell_scan.leading_cd("cd - && cat a.py"))
+
+    def test_cd_not_first_returns_none(self):
+        # only a leading cd reparents the whole command in our conservative model
+        self.assertIsNone(shell_scan.leading_cd("cat a.py && cd sub"))
+
+
 class WriteTargetsTest(unittest.TestCase):
     def targets(self, command):
         return shell_scan.write_targets(command)
