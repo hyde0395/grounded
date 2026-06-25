@@ -18,7 +18,8 @@ Verdict = namedtuple("Verdict", ["decision", "reason"])
 
 # Human-facing registry names for G-2 messages (lookup itself lives in
 # registry.py; this module stays free of I/O imports).
-REGISTRY_LABELS = {"npm": "npm registry", "pypi": "PyPI", "crates": "crates.io"}
+REGISTRY_LABELS = {"npm": "npm registry", "pypi": "PyPI", "crates": "crates.io",
+                   "rubygems": "RubyGems", "packagist": "Packagist"}
 
 
 def _stale_verdict(path, read_files, mtime, compacted_at=0):

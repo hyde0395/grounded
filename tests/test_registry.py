@@ -67,6 +67,24 @@ class CheckPackageTest(unittest.TestCase):
         self.assertIsNone(registry.check_package("brew", "jq",
                                                  opener=opener_returning(200)))
 
+    def test_rubygems_200_means_exists(self):
+        self.assertIs(registry.check_package("rubygems", "rails",
+                                             opener=opener_returning(200)), True)
+
+    def test_rubygems_404_means_absent(self):
+        self.assertIs(registry.check_package("rubygems", "nope",
+                                             opener=opener_raising(http_error(404))), False)
+
+    def test_packagist_keeps_vendor_slash_in_url(self):
+        # Packagist paths are /p2/vendor/name.json — the slash must survive
+        op = opener_returning(200)
+        registry.check_package("packagist", "monolog/monolog", opener=op)
+        self.assertIn("/p2/monolog/monolog.json", op.last_url)
+
+    def test_packagist_404_means_absent(self):
+        self.assertIs(registry.check_package("packagist", "no/such",
+                                             opener=opener_raising(http_error(404))), False)
+
 
 if __name__ == "__main__":
     unittest.main()

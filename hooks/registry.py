@@ -11,10 +11,14 @@ import urllib.request
 
 USER_AGENT = "grounded/0.5 (+https://github.com/hyde0395/grounded)"
 
+# (url template, safe chars to keep unencoded). Packagist names are
+# vendor/name, so its slash must survive quoting.
 REGISTRIES = {
-    "npm": "https://registry.npmjs.org/{name}",
-    "pypi": "https://pypi.org/simple/{name}/",
-    "crates": "https://crates.io/api/v1/crates/{name}",
+    "npm": ("https://registry.npmjs.org/{name}", ""),
+    "pypi": ("https://pypi.org/simple/{name}/", ""),
+    "crates": ("https://crates.io/api/v1/crates/{name}", ""),
+    "rubygems": ("https://rubygems.org/api/v1/gems/{name}.json", ""),
+    "packagist": ("https://repo.packagist.org/p2/{name}.json", "/"),
 }
 
 
@@ -24,7 +28,8 @@ def check_package(ecosystem, name, timeout=2.5, opener=None):
     if ecosystem not in REGISTRIES:
         return None
     opener = opener or urllib.request.urlopen
-    url = REGISTRIES[ecosystem].format(name=urllib.parse.quote(name, safe=""))
+    template, safe = REGISTRIES[ecosystem]
+    url = template.format(name=urllib.parse.quote(name, safe=safe))
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         resp = opener(req, timeout=timeout)

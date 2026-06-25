@@ -280,6 +280,46 @@ class PackageSpecsTest(unittest.TestCase):
         self.assertEqual(self.specs("cargo add serde@1"), [("crates", "serde")])
         self.assertEqual(self.specs("cargo install ripgrep"), [("crates", "ripgrep")])
 
+    def test_poetry_add_maps_to_pypi(self):
+        self.assertEqual(self.specs("poetry add httpx"), [("pypi", "httpx")])
+
+    def test_poetry_add_strips_at_constraint(self):
+        # poetry uses name@constraint as well as name>=x
+        self.assertEqual(self.specs("poetry add 'pendulum@^2.0.5'"), [("pypi", "pendulum")])
+
+    def test_bun_add_maps_to_npm(self):
+        self.assertEqual(self.specs("bun add react"), [("npm", "react")])
+        self.assertEqual(self.specs("bun add lodash@4.17.21"), [("npm", "lodash")])
+        self.assertEqual(self.specs("bun add @types/node"), [("npm", "@types/node")])
+
+    def test_gem_install_maps_to_rubygems(self):
+        self.assertEqual(self.specs("gem install rails"), [("rubygems", "rails")])
+
+    def test_gem_install_version_flag_not_treated_as_name(self):
+        # `-v 7.0`: the 7.0 is a version, not a gem
+        self.assertEqual(self.specs("gem install rails -v 7.0"), [("rubygems", "rails")])
+
+    def test_gem_install_multiple(self):
+        self.assertEqual(self.specs("gem install rails rake"),
+                         [("rubygems", "rails"), ("rubygems", "rake")])
+
+    def test_bundle_add_maps_to_rubygems(self):
+        self.assertEqual(self.specs("bundle add rails"), [("rubygems", "rails")])
+        self.assertEqual(self.specs("bundle add rails --version '~> 7.0'"),
+                         [("rubygems", "rails")])
+
+    def test_composer_require_maps_to_packagist(self):
+        self.assertEqual(self.specs("composer require monolog/monolog"),
+                         [("packagist", "monolog/monolog")])
+
+    def test_composer_require_strips_version_and_dev_flag(self):
+        self.assertEqual(self.specs("composer require --dev 'phpunit/phpunit:^10.0'"),
+                         [("packagist", "phpunit/phpunit")])
+
+    def test_composer_php_extension_without_vendor_skipped(self):
+        # `ext-gd` is a PHP extension, not a Packagist package
+        self.assertEqual(self.specs("composer require ext-gd"), [])
+
     def test_sudo_and_env_prefix(self):
         self.assertEqual(self.specs("sudo pip install requests"), [("pypi", "requests")])
         self.assertEqual(self.specs("PIP_NO_CACHE=1 pip install requests"), [("pypi", "requests")])

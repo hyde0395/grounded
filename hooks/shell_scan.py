@@ -235,7 +235,8 @@ def _pip_names(args):
             continue
         if a.startswith(_NON_REGISTRY_PREFIXES):
             continue
-        base = re.split(r"[\[<>=!~;,]", a)[0].strip()
+        # `@` covers poetry's name@constraint; pip itself uses ==/extras
+        base = re.split(r"[@\[<>=!~;,]", a)[0].strip()
         if base:
             names.append(base)
     return names
@@ -264,6 +265,39 @@ def _cargo_names(args):
         if not a or a.startswith("-") or "/" in a or a.startswith("."):
             continue
         names.append(a.split("@", 1)[0])
+    return [n for n in names if n]
+
+
+# gem/bundle flags that consume the following token as their value.
+_GEM_VALUE_FLAGS = {"-v", "--version", "-s", "--source", "-g", "--gemfile",
+                    "--group", "-i", "--install-dir"}
+
+
+def _gem_names(args):
+    names, skip_next = [], False
+    for a in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if a in _GEM_VALUE_FLAGS:
+            skip_next = True
+            continue
+        if not a or a.startswith("-") or "/" in a or a.startswith("."):
+            continue
+        if a.endswith(".gem"):  # a local gem file, not a registry name
+            continue
+        names.append(a.split(":", 1)[0].split("@", 1)[0])
+    return [n for n in names if n]
+
+
+def _composer_names(args):
+    # Packagist packages are always vendor/name; bare tokens (php extensions
+    # like ext-gd, the version in `name ^2.0`) are not registry packages.
+    names = []
+    for a in args:
+        if not a or a.startswith("-") or "/" not in a:
+            continue
+        names.append(a.split(":", 1)[0])
     return [n for n in names if n]
 
 
@@ -297,6 +331,16 @@ def _segment_package_specs(tokens):
             return [("pypi", n) for n in _pip_names(rest[2:])]
     if cmd == "cargo" and rest and rest[0] in ("add", "install"):
         return [("crates", n) for n in _cargo_names(rest[1:])]
+    if cmd == "poetry" and rest and rest[0] == "add":
+        return [("pypi", n) for n in _pip_names(rest[1:])]
+    if cmd == "bun" and rest and rest[0] in ("add", "install", "i"):
+        return [("npm", n) for n in _npm_names(rest[1:])]
+    if cmd == "gem" and rest and rest[0] == "install":
+        return [("rubygems", n) for n in _gem_names(rest[1:])]
+    if cmd == "bundle" and rest and rest[0] == "add":
+        return [("rubygems", n) for n in _gem_names(rest[1:])]
+    if cmd == "composer" and rest and rest[0] in ("require", "require-dev"):
+        return [("packagist", n) for n in _composer_names(rest[1:])]
     return []
 
 
