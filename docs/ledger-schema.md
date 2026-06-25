@@ -151,8 +151,8 @@ What counts as a read (recorded by PostToolUse — see below): `Read`,
 }
 ```
 
-- **Key**: `"<ecosystem>:<name>"`, where ecosystem is `npm`, `pypi`, or
-  `crates`.
+- **Key**: `"<ecosystem>:<name>"`, where ecosystem is `npm`, `pypi`,
+  `crates`, `rubygems`, or `packagist`.
 - **Value**: `true` (registry confirms it exists) or `false` (registry says
   404/410). As with URLs, a negative is wrapped as `[false, ts]` with the same
   600s TTL — a package published five minutes ago is the canonical stuck false
