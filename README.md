@@ -177,9 +177,12 @@ traffic grounded can generate:
 - **G-2** — one existence lookup against the public registry
   (registry.npmjs.org / pypi.org / crates.io / rubygems.org /
   repo.packagist.org) the first time a session installs a given package;
-  the answer is cached in the local ledger.
+  the answer is cached in the local ledger. Installs that name a custom
+  index/registry (`--index-url`, `--registry`, `--source`, …) are skipped —
+  grounded can't query a private registry, so it won't second-guess one.
 - **G-3** — one HEAD probe (GET fallback) against a URL the agent is about
-  to fetch or cite; private/localhost hosts are never probed.
+  to fetch or cite; private, loopback, and link-local hosts (incl. cloud
+  metadata `169.254.169.254`) are never probed.
 
 Both rules can be turned off (`{"G-2": false, "G-3": false}` in
 `.grounded/config.json`), every lookup is capped at 2.5s with a 5s
@@ -218,7 +221,7 @@ recently formalized:
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests   # 251 tests, hooks exercised via real stdin/exit-code interface
+python3 -m unittest discover -s tests   # 262 tests, hooks exercised via real stdin/exit-code interface
 ```
 
 The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post_record.py`, `pre_gate.py`), pure logic (`verdict.py`, `shell_scan.py` — no I/O, no LLM), and side effects at the edges (`ledger_io.py`, `registry.py`, `urlcheck.py`). Network calls take an injectable opener, so the whole suite runs offline.
@@ -238,6 +241,7 @@ The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post
 | v0.6.3 ✅ | wider G-1 read evidence — shell viewers `less`/`head`/`tail`/`bat`/`view`/`sed -n` count as reads (not just `cat`) | false STOPs after viewing a file with a non-`cat` pager |
 | v0.6.4 ✅ | wider G-2 ecosystems — `poetry`/`bun` reuse PyPI/npm; `gem`/`bundler` (RubyGems) and `composer` (Packagist) registries added | hallucinated installs in Ruby/PHP/Poetry/Bun projects |
 | v0.6.5 ✅ | wider G-1s shell-write vectors — `>\|` (force-clobber), `dd of=`, `truncate`, `awk -i inplace` join `sed -i`/`tee`/redirects | blind overwrites via less-common write idioms |
+| v0.6.6 ✅ | skip G-2 when a custom index/registry is named (`--index-url`/`--registry`/`--source`); exclude link-local & cloud-metadata hosts from G-3 probes | false STOP on legitimate private-registry installs |
 
 ## License
 

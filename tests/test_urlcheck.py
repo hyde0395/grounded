@@ -104,6 +104,18 @@ class IsCheckableTest(unittest.TestCase):
                     "http://172.20.3.4/", "http://myhost.local/"):
             self.assertFalse(urlcheck.is_checkable(url), url)
 
+    def test_link_local_and_metadata_are_not(self):
+        # 169.254/16 link-local incl. the cloud metadata endpoint, and IPv6
+        # link-local (fe80::/10) / ULA (fc00::/7) — never worth probing
+        for url in ("http://169.254.169.254/latest/meta-data/",
+                    "http://169.254.0.1/", "http://[fe80::1]/x",
+                    "http://[fc00::1]/x", "http://[fd12:3456::1]/x"):
+            self.assertFalse(urlcheck.is_checkable(url), url)
+
+    def test_public_ipv6_is_checkable(self):
+        # a global-unicast v6 address must still be probed
+        self.assertTrue(urlcheck.is_checkable("http://[2606:4700::1]/x"))
+
     def test_non_http_schemes_are_not(self):
         self.assertFalse(urlcheck.is_checkable("ftp://a.com/f"))
         self.assertFalse(urlcheck.is_checkable("file:///etc/hosts"))

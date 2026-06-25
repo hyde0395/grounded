@@ -357,6 +357,43 @@ class PackageSpecsTest(unittest.TestCase):
         # `ext-gd` is a PHP extension, not a Packagist package
         self.assertEqual(self.specs("composer require ext-gd"), [])
 
+    # A custom index/registry means the package lives on a registry grounded
+    # cannot query — checking it against the public one would falsely STOP a
+    # legitimate private install. Skip G-2 for the whole segment (fail open).
+    def test_pip_index_url_skips_check(self):
+        self.assertEqual(
+            self.specs("pip install --index-url https://pypi.internal/simple acme-lib"), [])
+
+    def test_pip_short_index_flag_skips_check(self):
+        self.assertEqual(self.specs("pip install -i https://pypi.internal/simple acme-lib"), [])
+
+    def test_pip_extra_index_url_skips_check(self):
+        self.assertEqual(
+            self.specs("pip install --extra-index-url https://pypi.internal acme-lib"), [])
+
+    def test_uv_pip_index_url_skips_check(self):
+        self.assertEqual(
+            self.specs("uv pip install --index-url https://pypi.internal acme-lib"), [])
+
+    def test_npm_custom_registry_skips_check(self):
+        self.assertEqual(
+            self.specs("npm install --registry=https://npm.internal @acme/lib"), [])
+
+    def test_yarn_custom_registry_skips_check(self):
+        self.assertEqual(
+            self.specs("yarn add --registry https://npm.internal acme-lib"), [])
+
+    def test_gem_custom_source_skips_check(self):
+        self.assertEqual(
+            self.specs("gem install acme-lib --source https://gems.internal"), [])
+
+    def test_cargo_custom_registry_skips_check(self):
+        self.assertEqual(self.specs("cargo add acme-lib --registry internal"), [])
+
+    def test_public_install_still_checked(self):
+        # the guard must not suppress ordinary public-registry installs
+        self.assertEqual(self.specs("pip install requests"), [("pypi", "requests")])
+
     def test_sudo_and_env_prefix(self):
         self.assertEqual(self.specs("sudo pip install requests"), [("pypi", "requests")])
         self.assertEqual(self.specs("PIP_NO_CACHE=1 pip install requests"), [("pypi", "requests")])

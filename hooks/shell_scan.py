@@ -264,6 +264,21 @@ _PIP_VALUE_FLAGS = {
 }
 _NON_REGISTRY_PREFIXES = ("file:", "git+", "http:", "https:", "github:", ".", "/", "~")
 
+# A custom index/registry/source aims an install at a registry grounded cannot
+# query, so the public-registry lookup would falsely STOP a legitimate private
+# install. Its presence suppresses G-2 for that segment (fail open).
+_PIP_INDEX_FLAGS = {"-i", "--index-url", "--extra-index-url"}
+_UV_INDEX_FLAGS = _PIP_INDEX_FLAGS | {"--index", "--default-index"}
+_NPM_INDEX_FLAGS = {"--registry"}
+_GEM_INDEX_FLAGS = {"-s", "--source"}
+_CARGO_INDEX_FLAGS = {"--registry", "--index"}
+_POETRY_INDEX_FLAGS = {"--source"}
+
+
+def _has_index_flag(args, flags):
+    """True if any token is one of `flags`, including the `--flag=value` form."""
+    return any(a in flags or a.split("=", 1)[0] in flags for a in args)
+
 
 def _pip_names(args):
     names, skip_next = [], False
@@ -359,28 +374,50 @@ def _segment_package_specs(tokens):
         return []
     cmd, rest = os.path.basename(tokens[0]), tokens[1:]
     if cmd in ("npm", "pnpm") and rest and rest[0] in ("install", "i", "add"):
+        if _has_index_flag(rest[1:], _NPM_INDEX_FLAGS):
+            return []
         return [("npm", n) for n in _npm_names(rest[1:])]
     if cmd == "yarn" and rest and rest[0] == "add":
+        if _has_index_flag(rest[1:], _NPM_INDEX_FLAGS):
+            return []
         return [("npm", n) for n in _npm_names(rest[1:])]
     if cmd in ("pip", "pip2", "pip3") and rest and rest[0] == "install":
+        if _has_index_flag(rest[1:], _PIP_INDEX_FLAGS):
+            return []
         return [("pypi", n) for n in _pip_names(rest[1:])]
     if cmd in ("python", "python2", "python3") and len(rest) >= 3 \
             and rest[0] == "-m" and rest[1] == "pip" and rest[2] == "install":
+        if _has_index_flag(rest[3:], _PIP_INDEX_FLAGS):
+            return []
         return [("pypi", n) for n in _pip_names(rest[3:])]
     if cmd == "uv" and rest:
         if rest[0] == "add":
+            if _has_index_flag(rest[1:], _UV_INDEX_FLAGS):
+                return []
             return [("pypi", n) for n in _pip_names(rest[1:])]
         if len(rest) >= 2 and rest[0] == "pip" and rest[1] == "install":
+            if _has_index_flag(rest[2:], _UV_INDEX_FLAGS):
+                return []
             return [("pypi", n) for n in _pip_names(rest[2:])]
     if cmd == "cargo" and rest and rest[0] in ("add", "install"):
+        if _has_index_flag(rest[1:], _CARGO_INDEX_FLAGS):
+            return []
         return [("crates", n) for n in _cargo_names(rest[1:])]
     if cmd == "poetry" and rest and rest[0] == "add":
+        if _has_index_flag(rest[1:], _POETRY_INDEX_FLAGS):
+            return []
         return [("pypi", n) for n in _pip_names(rest[1:])]
     if cmd == "bun" and rest and rest[0] in ("add", "install", "i"):
+        if _has_index_flag(rest[1:], _NPM_INDEX_FLAGS):
+            return []
         return [("npm", n) for n in _npm_names(rest[1:])]
     if cmd == "gem" and rest and rest[0] == "install":
+        if _has_index_flag(rest[1:], _GEM_INDEX_FLAGS):
+            return []
         return [("rubygems", n) for n in _gem_names(rest[1:])]
     if cmd == "bundle" and rest and rest[0] == "add":
+        if _has_index_flag(rest[1:], _GEM_INDEX_FLAGS):
+            return []
         return [("rubygems", n) for n in _gem_names(rest[1:])]
     if cmd == "composer" and rest and rest[0] in ("require", "require-dev"):
         return [("packagist", n) for n in _composer_names(rest[1:])]

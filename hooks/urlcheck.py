@@ -19,7 +19,11 @@ USER_AGENT = "grounded/0.3 (+https://github.com/hyde0395/grounded)"
 
 _PRIVATE_HOST = re.compile(
     r"^(localhost|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+"
-    r"|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|::1|.*\.local)$"
+    r"|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+"
+    r"|169\.254\.\d+\.\d+"          # IPv4 link-local incl. cloud metadata
+    r"|fe[89ab][0-9a-f]:.*"        # IPv6 link-local (fe80::/10)
+    r"|f[cd][0-9a-f]{2}:.*"        # IPv6 unique-local (fc00::/7)
+    r"|::1|.*\.local)$"
 )
 
 
