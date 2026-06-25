@@ -405,3 +405,54 @@ class UrlGateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManifestGateTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cwd = os.path.realpath(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def ledger(self, known_pkgs=None):
+        d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "ledger.json"), "w") as f:
+            json.dump({"read_files": {}, "verified_urls": {},
+                       "known_pkgs": known_pkgs or {}}, f)
+
+    def write(self, name, content):
+        with open(os.path.join(self.cwd, name), "w") as f:
+            f.write(content)
+
+    def bash(self, command):
+        return run_hook("pre_gate.py", {
+            "hook_event_name": "PreToolUse", "tool_name": "Bash",
+            "tool_input": {"command": command}, "cwd": self.cwd})
+
+    def test_npm_install_hallucinated_manifest_dep_blocked(self):
+        self.ledger(known_pkgs={"npm:lodashh": False})
+        self.write("package.json", '{"dependencies":{"lodashh":"^1"}}')
+        r = self.bash("npm install")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("lodashh", r.stderr)
+
+    def test_npm_install_real_dep_passes(self):
+        self.ledger(known_pkgs={"npm:react": True})
+        self.write("package.json", '{"dependencies":{"react":"^18"}}')
+        r = self.bash("npm install")
+        self.assertEqual(r.returncode, 0)
+
+    def test_missing_manifest_passes(self):
+        self.ledger()
+        r = self.bash("npm install")
+        self.assertEqual(r.returncode, 0)
+
+    def test_locked_dep_not_checked(self):
+        self.ledger(known_pkgs={"npm:internalpkg": False})
+        self.write("package.json", '{"dependencies":{"internalpkg":"^1"}}')
+        self.write("package-lock.json",
+                   '{"packages":{"node_modules/internalpkg":{}}}')
+        r = self.bash("npm install")
+        self.assertEqual(r.returncode, 0)
