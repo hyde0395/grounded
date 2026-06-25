@@ -485,3 +485,77 @@ def package_specs(command):
             seen.add(item)
             result.append(item)
     return result
+
+
+def _positional_after(rest, verb):
+    """True if a non-flag token (a package name) follows `verb` in `rest`."""
+    seen_verb = False
+    for t in rest:
+        if not seen_verb:
+            seen_verb = t == verb
+            continue
+        if t and not t.startswith("-"):
+            return True
+    return False
+
+
+def _dash_r_file(rest):
+    """The file named by `-r`/`--requirement` (a manifest), else None."""
+    for i, t in enumerate(rest):
+        if t in ("-r", "--requirement") and i + 1 < len(rest):
+            return rest[i + 1]
+        if t.startswith("--requirement="):
+            return t.split("=", 1)[1]
+    return None
+
+
+def _segment_manifest_install(tokens):
+    """(ecosystem, manifest_path) if this segment is a bare, manifest-resolving
+    install (no positional package names), else None."""
+    tokens = _strip_prefixes(tokens)
+    if not tokens:
+        return None
+    cmd, rest = os.path.basename(tokens[0]), tokens[1:]
+    if cmd in ("npm", "pnpm", "bun"):
+        if rest and rest[0] in ("install", "i", "ci") \
+                and not _positional_after(rest, rest[0]):
+            return ("npm", "package.json")
+    if cmd == "yarn":
+        if (not rest or rest[0] == "install") \
+                and not _positional_after(rest, "install"):
+            return ("npm", "package.json")
+    if cmd in ("pip", "pip2", "pip3") and rest[:1] == ["install"]:
+        f = _dash_r_file(rest)
+        return ("pypi", f) if f else None
+    if cmd in ("python", "python2", "python3") and rest[:3] == ["-m", "pip", "install"]:
+        f = _dash_r_file(rest[3:])
+        return ("pypi", f) if f else None
+    if cmd == "uv":
+        if rest[:1] == ["sync"]:
+            return ("pypi", "pyproject.toml")
+        if rest[:2] == ["pip", "install"]:
+            f = _dash_r_file(rest[2:])
+            return ("pypi", f) if f else None
+    if cmd == "poetry" and rest[:1] == ["install"]:
+        return ("pypi", "pyproject.toml")
+    if cmd == "bundle" and (not rest or rest[0] == "install"):
+        return ("rubygems", "Gemfile")
+    if cmd == "composer" and rest and rest[0] in ("install", "update") \
+            and not _positional_after(rest, rest[0]):
+        return ("packagist", "composer.json")
+    if cmd == "cargo" and rest and rest[0] in ("build", "fetch"):
+        return ("crates", "Cargo.toml")
+    return None
+
+
+def manifest_installs(command):
+    """[(ecosystem, manifest_path)] for bare, manifest-resolving install
+    commands (no positional package names). Statically conservative —
+    mutually exclusive with package_specs (commands carrying names)."""
+    command = _mask_heredocs(command)
+    found = []
+    for segment in _split_segments(command):
+        hit = _segment_manifest_install(_tokens(segment))
+        if hit and hit not in found:
+            found.append(hit)
+    return found

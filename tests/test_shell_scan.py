@@ -439,3 +439,31 @@ class PackageSpecsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManifestInstallsTest(unittest.TestCase):
+    def mi(self, command):
+        return shell_scan.manifest_installs(command)
+
+    def test_npm_install_bare(self):
+        self.assertEqual(self.mi("npm install"), [("npm", "package.json")])
+        self.assertEqual(self.mi("npm ci"), [("npm", "package.json")])
+
+    def test_npm_install_with_name_is_not_manifest(self):
+        self.assertEqual(self.mi("npm install lodash"), [])
+
+    def test_pip_dash_r(self):
+        self.assertEqual(self.mi("pip install -r requirements.txt"),
+                         [("pypi", "requirements.txt")])
+
+    def test_poetry_and_bundle_and_composer(self):
+        self.assertEqual(self.mi("poetry install"), [("pypi", "pyproject.toml")])
+        self.assertEqual(self.mi("bundle install"), [("rubygems", "Gemfile")])
+        self.assertEqual(self.mi("composer install"),
+                         [("packagist", "composer.json")])
+
+    def test_cargo_build(self):
+        self.assertEqual(self.mi("cargo build"), [("crates", "Cargo.toml")])
+
+    def test_non_install_command(self):
+        self.assertEqual(self.mi("npm run build"), [])

@@ -14,6 +14,7 @@ import sys
 import time
 
 import ledger_io
+import manifest_scan
 import registry
 import shell_scan
 import urlcheck
@@ -171,6 +172,28 @@ def gate_file_tool(payload):
     return _emit([], warns)
 
 
+def _manifest_specs(command, cwd, existing):
+    """(ecosystem, name) specs declared in manifests that a bare install command
+    resolves. Reads each manifest, drops deps already locked/installed (positive
+    evidence) and any already in `existing`, and returns the rest for the G-2
+    existence check. Unreadable manifests are skipped (fail open)."""
+    specs, seen = [], set(existing)
+    for eco, rel in shell_scan.manifest_installs(command):
+        mpath = ledger_io.normalize(rel, cwd)
+        try:
+            with open(mpath, encoding="utf-8") as f:
+                content = f.read()
+        except OSError:
+            continue  # no manifest → nothing to verify (fail open)
+        grounded = manifest_scan.grounded_names(os.path.dirname(mpath), eco)
+        for name in manifest_scan.deps(eco, content):
+            spec = (eco, name)
+            if name not in grounded and spec not in seen:
+                seen.add(spec)
+                specs.append(spec)
+    return specs
+
+
 def gate_bash(payload):
     command = (payload.get("tool_input") or {}).get("command") or ""
     if not command:
@@ -215,6 +238,9 @@ def gate_bash(payload):
         warn_pairs.extend(url_warns)
 
     package_specs = shell_scan.package_specs(command) if cfg["g-2"] else []
+    if cfg["g-2"]:
+        package_specs = list(package_specs)
+        package_specs.extend(_manifest_specs(command, cwd, package_specs))
     for ecosystem, name in package_specs[:MAX_REGISTRY_LOOKUPS]:
         key = f"{ecosystem}:{name}"
         exists = _cache_get(ledger["known_pkgs"], key)
