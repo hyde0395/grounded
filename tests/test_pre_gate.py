@@ -292,6 +292,18 @@ class BashGateTest(unittest.TestCase):
         r = run_hook("pre_gate.py", bash_payload("pip install requests", self.cwd))
         self.assertEqual(r.returncode, 0)
 
+    def test_sixth_package_in_one_command_is_still_checked(self):
+        # the per-command lookup cap must not let a hallucinated package hide
+        # behind five valid ones. All answers are cached, so no network.
+        self.write_ledger(known_pkgs={
+            "pypi:a": True, "pypi:b": True, "pypi:c": True,
+            "pypi:d": True, "pypi:e": True, "pypi:reqests": False,
+        })
+        r = run_hook("pre_gate.py",
+                     bash_payload("pip install a b c d e reqests", self.cwd))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("[grounded G-2]", r.stderr)
+
     def test_corrupt_ledger_fails_open_for_bash(self):
         p = self.touch("a.py")
         d = os.path.join(self.cwd, ".grounded")

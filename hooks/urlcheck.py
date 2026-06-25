@@ -58,8 +58,10 @@ def check_url(url, timeout=2.5, opener=None):
         try:
             return _request(url, method, timeout, opener)
         except urllib.error.HTTPError as e:
-            if e.code in (405, 501) and method == "HEAD":
-                method = "GET"  # endpoint dislikes HEAD; one retry, then give up
+            # 405/501: endpoint rejects HEAD outright. 403: some bot walls block
+            # HEAD but serve GET — retry once so a live link is not falsely WARNed.
+            if e.code in (403, 405, 501) and method == "HEAD":
+                method = "GET"
                 continue
             return e.code
         except urllib.error.URLError as e:

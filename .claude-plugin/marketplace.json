@@ -10,7 +10,7 @@
       "name": "grounded",
       "source": "./",
       "description": "Grounding enforcement guardrail — deterministically blocks ungrounded agent actions: editing files never read, installing hallucinated packages, fetching dead URLs. No LLM, no dependencies.",
-      "version": "0.6.6",
+      "version": "0.6.7",
       "author": { "name": "hyde0395", "url": "https://github.com/hyde0395" },
       "homepage": "https://github.com/hyde0395/grounded",
       "repository": "https://github.com/hyde0395/grounded",

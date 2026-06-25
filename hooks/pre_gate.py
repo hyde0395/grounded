@@ -20,8 +20,11 @@ import urlcheck
 import verdict
 
 GATED_FILE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
-MAX_REGISTRY_LOOKUPS = 5
-MAX_URL_CHECKS = 3
+# Generous caps that only bound a pathological arg list; the real latency
+# guard is the wall-clock _Budget below (cached answers cost no network, so a
+# command installing many already-seen packages stays fast regardless).
+MAX_REGISTRY_LOOKUPS = 25
+MAX_URL_CHECKS = 10
 NETWORK_BUDGET_SECONDS = 5.0
 
 # Injected once after any warning. A warning that repeats on every retry

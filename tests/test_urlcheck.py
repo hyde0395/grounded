@@ -79,6 +79,20 @@ class CheckUrlTest(unittest.TestCase):
         self.assertEqual(urlcheck.check_url("https://a.com", opener=opener), 200)
         self.assertEqual(calls, ["HEAD", "GET"])
 
+    def test_head_403_retries_with_get(self):
+        # some servers bot-wall HEAD with 403 but serve GET — don't WARN on a
+        # link that is actually alive
+        calls = []
+
+        def opener(req, timeout=None):
+            calls.append(req.get_method())
+            if req.get_method() == "HEAD":
+                raise http_error(403)
+            return FakeResponse(200)
+
+        self.assertEqual(urlcheck.check_url("https://a.com", opener=opener), 200)
+        self.assertEqual(calls, ["HEAD", "GET"])
+
     def test_uses_head_by_default(self):
         op = opener_returning(200)
         urlcheck.check_url("https://a.com", opener=op)
