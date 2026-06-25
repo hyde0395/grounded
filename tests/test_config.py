@@ -10,7 +10,7 @@ import ledger_io  # noqa: E402
 
 from hook_runner import run_hook  # noqa: E402
 
-ALL_RULES = ("g-1", "g-1s", "g-2", "g-3", "freshness", "grep-evidence")
+ALL_RULES = ("g-1", "g-1s", "g-2", "g-3", "g-4", "freshness", "grep-evidence")
 
 
 class LoadConfigTest(unittest.TestCase):

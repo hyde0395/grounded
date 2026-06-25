@@ -76,6 +76,7 @@ agent chasing the warning instead of the task.
 | **G-1s** Shell-write gating | `sed -i`, `perl -i`, `awk -i inplace`, `tee`, `>`, `>\|`, `dd of=`, `truncate`, `cp`/`mv` onto a never-read file → blocked; `>>` (append) and batch writes with run-time targets (`find -exec sed -i`, `xargs sed -i`) → warning only | ✅ v0.2 |
 | **G-2** Verify-before-install | A package can't be installed unless it exists on its registry — npm (npm/pnpm/yarn/bun), PyPI (pip/uv/poetry), crates.io (cargo), RubyGems (gem/bundler), Packagist (composer) | ✅ v0.2 |
 | **G-3** Fetch-before-cite | Dead URLs (404/410/DNS failure) are blocked; ambiguous ones (403/5xx/timeout) only warn | ✅ v0.3 |
+| **G-4** Live-links-in-answers | On `Stop`, the final answer text is scanned for the URLs it cites: a dead one (404/410/DNS) blocks the turn **once** so the model fixes it; ambiguous ones (403/5xx) warn. Links inside code blocks are treated as illustrative and skipped | ✅ v0.7 |
 | **freshness** Stale-read detection | A file that changed on disk *after* it was read → warning to re-read before relying on it | ✅ v0.5 |
 
 When a rule blocks, the model receives an actionable reason:
@@ -107,7 +108,7 @@ project, or with the `GROUNDED_DISABLE` environment variable (comma-separated,
 case-insensitive; env wins over file):
 
 ```json
-{ "G-1": true, "G-1s": true, "G-2": true, "G-3": false, "freshness": true, "grep-evidence": false }
+{ "G-1": true, "G-1s": true, "G-2": true, "G-3": false, "G-4": true, "freshness": true, "grep-evidence": false }
 ```
 
 ```bash
@@ -193,8 +194,8 @@ lives in `.grounded/ledger.json` inside your project.
 
 We'd rather tell you up front than have you find out:
 
-- **Text responses are invisible to hooks.** If the agent pastes a link or a claim as plain chat text without using a tool, no hook fires. That's a structural limit of hooks; a bundled prompt rule (roadmap v0.4) only partially mitigates it.
-- **Recent Claude Code already covers the simplest G-1 case.** Claude Code's built-in validation rejects `Edit` on a never-read file by itself. grounded's G-1 is defense-in-depth there — its own value is the evidence ledger (it counts `cat`/`grep` as reads, tracks freshness, and powers the rules the built-in check doesn't have: shell-level write bypasses, G-2, G-3).
+- **Text responses are only partly covered.** Hooks can't see the model mid-sentence, but the `Stop` event hands over the finished answer — so G-4 *can* check one kind of plain-text claim: the links it cites (a dead URL in the answer is blocked even though no fetch tool ran). That works because a URL is a token you can extract and verify deterministically. The harder half — free-form factual claims like "function X returns Y" — stays a structural wall: identifying and verifying an arbitrary claim needs an LLM and a source of truth, which is outside what a deterministic hook can do. A bundled prompt rule only nudges the model there.
+- **G-1's read-before-edit overlaps the built-in; its real value is elsewhere.** Claude Code's built-in validation already rejects `Edit` on a never-read file, so that part of G-1 is just defense-in-depth (and a fallback for agents without it). G-1's distinct value is what the built-in *doesn't* do: gating shell-level writes (`sed -i`/`tee`/`cp`/redirects) the built-in ignores entirely, counting `cat`/`grep`/`git diff` as evidence, and the freshness/compaction staleness checks. Read the rule as "grounding for the write paths and time-axis the built-in skips," not "read-before-edit."
 - **Bot walls cause false signals.** Cloudflare answering `curl` with 403 doesn't mean the link is dead — which is exactly why G-3 warns instead of blocks on 403.
 - **grounded is not an adversarial boundary.** Shell-write gating catches the common idioms (`sed -i`, `tee`, redirections) — the lazy path, not the evasive one. A model that deliberately hides a write behind `python -c` or base64 isn't being sloppy, it's evading a guardrail; that's a security problem, and the answer is sandboxing and permissions — the layer grounded explicitly complements, not replaces.
 - **What we promise:** grounding enforcement at the tool boundary. **What we don't:** catching every hallucination.
@@ -244,6 +245,7 @@ The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post
 | v0.6.6 ✅ | skip G-2 when a custom index/registry is named (`--index-url`/`--registry`/`--source`); exclude link-local & cloud-metadata hosts from G-3 probes | false STOP on legitimate private-registry installs |
 | v0.6.7 ✅ | raise per-command lookup caps (wall-clock budget is the real guard); retry a `403` HEAD with GET | unchecked 6th+ package, false WARN on HEAD-hostile-but-live links |
 | v0.6.8 ✅ | re-warn on a second compaction (dedup keyed to the compaction); resolve `cd x && …` reads and `git diff` paths against the right directory | lost re-read prompt after re-compaction, missed reads under `cd`/subdir-git |
+| v0.7.0 ✅ | G-4 speech gate — on `Stop`, scan the finished answer for dead links it cites (block once / warn ambiguous), the first check of plain-text output (code blocks excluded, blocks at most once per turn) | citing a dead link in the answer with no fetch tool ever run |
 
 ## License
 

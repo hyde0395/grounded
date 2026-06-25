@@ -23,9 +23,10 @@ LEDGER_FILE = "ledger.json"
 LOCK_FILE = "ledger.lock"
 CONFIG_FILE = "config.json"
 
-# Canonical toggle names. g-1s is the shell-write arm of G-1; grep-evidence
-# controls whether a Grep counts as having read the file (strict mode: off).
-RULES = ("g-1", "g-1s", "g-2", "g-3", "freshness", "grep-evidence")
+# Canonical toggle names. g-1s is the shell-write arm of G-1; g-4 is the Stop
+# speech gate (dead links in the answer text); grep-evidence controls whether
+# a Grep counts as having read the file (strict mode: off).
+RULES = ("g-1", "g-1s", "g-2", "g-3", "g-4", "freshness", "grep-evidence")
 
 
 def _canon(name):

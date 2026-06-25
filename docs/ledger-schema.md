@@ -1,14 +1,15 @@
 # The grounded ledger
 
-This document describes the on-disk state that grounded's two hooks share:
+This document describes the on-disk state that grounded's hooks share:
 `.grounded/ledger.json`. It is a reference for anyone curious about how the
 evidence store is shaped and why — not a spec to copy verbatim. We describe
 what our code actually does and where the trade-offs hurt; **this is one way
 to do it, not the way.**
 
 > **Scope.** Everything below is read off the implementation in `hooks/`
-> (`ledger_io.py`, `post_record.py`, `pre_gate.py`, `verdict.py`,
-> `shell_scan.py`). If the code and this doc ever disagree, the code wins.
+> (`ledger_io.py`, `post_record.py`, `pre_gate.py`, `stop_gate.py`,
+> `verdict.py`, `shell_scan.py`, `text_scan.py`). If the code and this doc
+> ever disagree, the code wins.
 
 ---
 
@@ -206,9 +207,12 @@ off the *event*, not the actual eviction.
 
 ## Who writes what: PostToolUse vs PreToolUse
 
-The whole design is two hooks over one file: **PostToolUse accrues evidence,
+The core design is two hooks over one file: **PostToolUse accrues evidence,
 PreToolUse demands it.** They never call each other; the file is the only
-channel between them.
+channel between them. A third gate, the **Stop hook** (`stop_gate.py`, G-4),
+reads the same file — it scans the finished answer for dead links it cites,
+reusing the `verified_urls` cache and `warned` dedup, and blocks the turn once
+if a link is dead. It writes only those two cache sections, never `read_files`.
 
 ### PostToolUse (`post_record.py`) — observe-only, never blocks
 
@@ -298,10 +302,10 @@ Corruption handling differs by reader, and on purpose:
 
 ## Test matrix
 
-275 test methods, all offline (network code is exercised through injected fake
+301 test methods, all offline (network code is exercised through injected fake
 openers, never the real internet — several methods loop over multiple cases, so
 the asserted-case count is higher). Run with
-`python3 -m unittest discover -s tests` → `Ran 275 tests … OK`. By area:
+`python3 -m unittest discover -s tests` → `Ran 301 tests … OK`. By area:
 
 | File | Count | What it pins down |
 |---|--:|---|
@@ -316,6 +320,8 @@ the asserted-case count is higher). Run with
 | `test_root.py` | 7 | Root anchoring: `$CLAUDE_PROJECT_DIR` wins, walk-up to `.grounded/`, fallback to cwd, bogus env ignored; edits/reads from a subdir cwd still see/accrue into the root ledger. |
 | `test_session_start.py` | 9 | Lifecycle: startup/clear reset, resume keeps, resume+corrupt heals to empty, compact marks `compacted_at` while keeping reads, resume does not mark it, prompt-rule injection, garbage stdin exits 0. |
 | `test_budget.py` | 3 | Network budget: exhausted budget skips uncached lookups, cached dead URL still blocks after deadline, fresh budget performs the lookup. |
+| `test_text_scan.py` | 13 | Pure URL extraction from answer prose: plain/http+https, order-preserving dedup, non-http schemes ignored, code-fence & inline-code masking (illustrative URLs skipped), markdown-link/autolink/paren/quote unwrapping, trailing-punctuation stripping. |
+| `test_stop_gate.py` | 13 | G-4 speech gate end-to-end: dead (404/DNS) cited link→`decision:block`, alive→silent, ambiguous(403)→`additionalContext` warn (once per session), code-fence link not gated, `stop_hook_active`→silent (block once per turn), trailing tool-use event ignored, no-transcript/no-URL/disabled(env+file)/corrupt-ledger→fail open. |
 
 ---
 
