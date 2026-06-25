@@ -74,7 +74,7 @@ agent chasing the warning instead of the task.
 |---|---|---|
 | **G-1** Read-before-edit | A file can't be edited unless it was read this session (Read, Grep, shell viewers `cat`/`less`/`head`/`tail`/`bat`/`view`/`sed -n`, `git diff`/`git show` output) | ✅ v0.1 |
 | **G-1s** Shell-write gating | `sed -i`, `perl -i`, `awk -i inplace`, `tee`, `>`, `>\|`, `dd of=`, `truncate`, `cp`/`mv` onto a never-read file → blocked; `>>` (append) and batch writes with run-time targets (`find -exec sed -i`, `xargs sed -i`) → warning only | ✅ v0.2 |
-| **G-2** Verify-before-install | A package can't be installed unless it exists on its registry — npm (npm/pnpm/yarn/bun), PyPI (pip/uv/poetry), crates.io (cargo), RubyGems (gem/bundler), Packagist (composer) | ✅ v0.2 |
+| **G-2** Verify-before-install | A package can't be installed unless it exists on its registry — npm (npm/pnpm/yarn/bun), PyPI (pip/uv/poetry), crates.io (cargo), RubyGems (gem/bundler), Packagist (composer). Also checks **dependencies declared in a manifest** when a bare install resolves it (`npm install` → `package.json`, `pip install -r`, `poetry/bundle/composer install`, `cargo build`); deps already in a lockfile/installed are trusted as-is | ✅ v0.2 |
 | **G-3** Fetch-before-cite | Dead URLs (404/410/DNS failure) are blocked; ambiguous ones (403/5xx/timeout) only warn | ✅ v0.3 |
 | **freshness** Stale-read detection | A file that changed on disk *after* it was read → warning to re-read before relying on it | ✅ v0.5 |
 
@@ -221,7 +221,7 @@ recently formalized:
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests   # 275 tests, hooks exercised via real stdin/exit-code interface
+python3 -m unittest discover -s tests   # 310 tests, hooks exercised via real stdin/exit-code interface
 ```
 
 The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post_record.py`, `pre_gate.py`), pure logic (`verdict.py`, `shell_scan.py` — no I/O, no LLM), and side effects at the edges (`ledger_io.py`, `registry.py`, `urlcheck.py`). Network calls take an injectable opener, so the whole suite runs offline.
@@ -244,6 +244,7 @@ The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post
 | v0.6.6 ✅ | skip G-2 when a custom index/registry is named (`--index-url`/`--registry`/`--source`); exclude link-local & cloud-metadata hosts from G-3 probes | false STOP on legitimate private-registry installs |
 | v0.6.7 ✅ | raise per-command lookup caps (wall-clock budget is the real guard); retry a `403` HEAD with GET | unchecked 6th+ package, false WARN on HEAD-hostile-but-live links |
 | v0.6.8 ✅ | re-warn on a second compaction (dedup keyed to the compaction); resolve `cd x && …` reads and `git diff` paths against the right directory | lost re-read prompt after re-compaction, missed reads under `cd`/subdir-git |
+| v0.7.0 ✅ | G-2 also verifies dependencies declared in a **manifest** (`package.json`, `requirements.txt`/`pyproject.toml`, `Cargo.toml`, `Gemfile`, `composer.json`) on a bare install; lockfile/installed deps trusted, custom-source/private-index manifests skipped | hallucinated dep added to a manifest then installed by a name-less command |
 
 ## License
 
