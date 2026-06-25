@@ -73,7 +73,7 @@ agent chasing the warning instead of the task.
 | Rule | What it enforces | Status |
 |---|---|---|
 | **G-1** Read-before-edit | A file can't be edited unless it was read this session (Read, Grep, shell viewers `cat`/`less`/`head`/`tail`/`bat`/`view`/`sed -n`, `git diff`/`git show` output) | ✅ v0.1 |
-| **G-1s** Shell-write gating | `sed -i`, `perl -i`, `tee`, `>`, `cp`/`mv` onto a never-read file → blocked; `>>` (append) and batch writes with run-time targets (`find -exec sed -i`, `xargs sed -i`) → warning only | ✅ v0.2 |
+| **G-1s** Shell-write gating | `sed -i`, `perl -i`, `awk -i inplace`, `tee`, `>`, `>\|`, `dd of=`, `truncate`, `cp`/`mv` onto a never-read file → blocked; `>>` (append) and batch writes with run-time targets (`find -exec sed -i`, `xargs sed -i`) → warning only | ✅ v0.2 |
 | **G-2** Verify-before-install | A package can't be installed unless it exists on its registry — npm (npm/pnpm/yarn/bun), PyPI (pip/uv/poetry), crates.io (cargo), RubyGems (gem/bundler), Packagist (composer) | ✅ v0.2 |
 | **G-3** Fetch-before-cite | Dead URLs (404/410/DNS failure) are blocked; ambiguous ones (403/5xx/timeout) only warn | ✅ v0.3 |
 | **freshness** Stale-read detection | A file that changed on disk *after* it was read → warning to re-read before relying on it | ✅ v0.5 |
@@ -218,7 +218,7 @@ recently formalized:
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests   # 242 tests, hooks exercised via real stdin/exit-code interface
+python3 -m unittest discover -s tests   # 251 tests, hooks exercised via real stdin/exit-code interface
 ```
 
 The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post_record.py`, `pre_gate.py`), pure logic (`verdict.py`, `shell_scan.py` — no I/O, no LLM), and side effects at the edges (`ledger_io.py`, `registry.py`, `urlcheck.py`). Network calls take an injectable opener, so the whole suite runs offline.
@@ -237,6 +237,7 @@ The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post
 | v0.6.2 ✅ | compaction-aware staleness — warn before editing a file whose read predates a context compaction, plus a published ledger-schema reference | acting on reads evicted from context by compaction |
 | v0.6.3 ✅ | wider G-1 read evidence — shell viewers `less`/`head`/`tail`/`bat`/`view`/`sed -n` count as reads (not just `cat`) | false STOPs after viewing a file with a non-`cat` pager |
 | v0.6.4 ✅ | wider G-2 ecosystems — `poetry`/`bun` reuse PyPI/npm; `gem`/`bundler` (RubyGems) and `composer` (Packagist) registries added | hallucinated installs in Ruby/PHP/Poetry/Bun projects |
+| v0.6.5 ✅ | wider G-1s shell-write vectors — `>\|` (force-clobber), `dd of=`, `truncate`, `awk -i inplace` join `sed -i`/`tee`/redirects | blind overwrites via less-common write idioms |
 
 ## License
 

@@ -87,6 +87,43 @@ class WriteTargetsTest(unittest.TestCase):
         self.assertEqual(self.targets("echo a > f.txt; echo b > f.txt"),
                          [("f.txt", shell_scan.TRUNCATE)])
 
+    def test_force_clobber_redirect_truncates(self):
+        # `>|` overrides noclobber — same destructive write as `>`
+        self.assertEqual(self.targets("echo hi >| foo.txt"),
+                         [("foo.txt", shell_scan.TRUNCATE)])
+
+    def test_force_clobber_redirect_no_space(self):
+        self.assertEqual(self.targets("echo hi >|foo.txt"),
+                         [("foo.txt", shell_scan.TRUNCATE)])
+
+    def test_dd_of_overwrites(self):
+        # content comes from if=, which the model has not necessarily seen
+        self.assertEqual(self.targets("dd if=/dev/zero of=disk.img bs=1M count=1"),
+                         [("disk.img", shell_scan.OVERWRITE)])
+
+    def test_dd_without_of_has_no_target(self):
+        self.assertEqual(self.targets("dd if=a.img | gzip"), [])
+
+    def test_truncate_overwrites(self):
+        self.assertEqual(self.targets("truncate -s 0 log.txt"),
+                         [("log.txt", shell_scan.OVERWRITE)])
+
+    def test_truncate_size_equals_form(self):
+        self.assertEqual(self.targets("truncate --size=0 log.txt"),
+                         [("log.txt", shell_scan.OVERWRITE)])
+
+    def test_awk_inplace_basic(self):
+        self.assertEqual(self.targets("awk -i inplace '{print}' data.txt"),
+                         [("data.txt", shell_scan.INPLACE)])
+
+    def test_awk_inplace_with_program_file_keeps_data(self):
+        # `-f prog.awk` supplies the program → positionals are data files
+        self.assertEqual(self.targets("gawk -i inplace -f prog.awk data.txt"),
+                         [("data.txt", shell_scan.INPLACE)])
+
+    def test_awk_without_inplace_is_not_a_write(self):
+        self.assertEqual(self.targets("awk '{print}' data.txt"), [])
+
 
 class BatchWriteHintsTest(unittest.TestCase):
     """find -exec / xargs feeding an in-place editor: targets are dynamic,

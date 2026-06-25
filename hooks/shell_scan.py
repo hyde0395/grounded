@@ -17,7 +17,8 @@ OVERWRITE = "overwrite"  # cp/mv onto file — replaces with content the model
 
 _QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
 _OPERATORS = re.compile(r"\|\||&&|[|;\n]")
-_REDIRECT = re.compile(r"(>>|>)\s*([^\s|;&<>]+)")
+# `>|` forces a clobber past noclobber — same destructive write as `>`.
+_REDIRECT = re.compile(r"(>>|>\||>)\s*([^\s|;&<>]+)")
 _UNRESOLVABLE = set("$`(){}*?")
 _SKIP_PREFIXES = ("/dev/", "/proc/", "-")
 
@@ -117,6 +118,16 @@ def _inplace_invocation(tokens):
     return None
 
 
+def _awk_inplace(rest):
+    """True if awk/gawk args load the in-place extension (`-i inplace`)."""
+    for i, t in enumerate(rest):
+        if t == "-i" and i + 1 < len(rest) and rest[i + 1] == "inplace":
+            return True
+        if t in ("-iinplace", "--include=inplace"):
+            return True
+    return False
+
+
 def _segment_batch_hint(tokens):
     tokens = _strip_prefixes(tokens)
     if not tokens:
@@ -191,6 +202,38 @@ def _segment_write_targets(tokens):
         if len(files) < 2:
             return []
         return [(files[-1], OVERWRITE)]
+    if cmd == "dd":
+        # of= names an output the model writes; content is if='s, not authored
+        for tok in rest:
+            if tok.startswith("of="):
+                target = tok[3:]
+                if target and target != "/dev/stdout":
+                    return [(target, OVERWRITE)]
+        return []
+    if cmd == "truncate":
+        # shrinks/zeroes a file — destroys content the model never saw
+        files = _positionals(rest, {"-s", "--size", "-r", "--reference"}, False)
+        return [(f, OVERWRITE) for f in files]
+    if cmd in ("awk", "gawk"):
+        if not _awk_inplace(rest):
+            return []
+        value_flags = {"-i", "-v", "-F", "-f", "--include", "--assign",
+                       "--field-separator", "--file", "--source"}
+        has_program_file = any(t in ("-f", "--file") for t in rest)
+        files, skip_next = [], False
+        for tok in rest:
+            if skip_next:
+                skip_next = False
+                continue
+            if tok in value_flags:
+                skip_next = True
+                continue
+            if tok.startswith("-") or not tok:
+                continue
+            files.append(tok)
+        if not has_program_file and files:
+            files = files[1:]  # first positional is the inline awk program
+        return [(f, INPLACE) for f in files]
     return []
 
 
