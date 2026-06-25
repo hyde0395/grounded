@@ -2,7 +2,8 @@
 
 Observe-only — never blocks, always exit 0 (spec §03: post-record accrues,
 pre-gate inspects). Evidence sources for G-1: Read, Grep on a single file,
-Edit/Write (you know the content you just wrote), Bash `cat`.
+Edit/Write (you know the content you just wrote), Bash read-only viewers
+(`cat`/`less`/`more`/`bat`/`view`/`head`/`tail`, `sed -n` print mode).
 """
 import json
 import os
@@ -16,8 +17,19 @@ import shell_scan
 import urlcheck
 
 RECORDING_TOOLS = {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit"}
-# A `cat` segment ends at pipes, separators, or redirections.
-CAT_SEGMENT = re.compile(r"(?:^|[|;&]\s*)cat\b([^|;&><]*)")
+# Pure readers — they print a file's content and never modify it, so seeing
+# their target is read evidence just like `cat`. A segment ends at pipes,
+# separators, or redirections. Partial views (`head -5`, `tail -20`) still
+# count: the hook cannot correlate the viewed range with an Edit's target
+# (Edit matches a string, not a line number), and the project favours avoiding
+# false STOPs over catching a partial read (§02 "오탐 < 누락"). The `isfile()`
+# guard in read_targets neutralizes flag values like the `5` in `head -n 5`.
+READER_SEGMENT = re.compile(
+    r"(?:^|[|;&]\s*)(?:cat|less|more|bat|view|head|tail)\b([^|;&><]*)")
+# `sed -n ...p file` prints (reads) the file. `sed -i` rewrites it (a write
+# vector, never read evidence — G-1s), so credit only the `-n` print form with
+# no in-place flag.
+SED_SEGMENT = re.compile(r"(?:^|[|;&]\s*)sed\b([^|;&><]*)")
 # `git diff`/`git show` print the post-image path in the diff header; seeing
 # the full diff of a file is read evidence for it.
 GIT_SEGMENT = re.compile(r"(?:^|[|;&]\s*)git\b")
@@ -37,19 +49,37 @@ def _response_text(tool_response):
                      for v in [tool_response.get(k)] if isinstance(v, str))
 
 
-def cat_targets(command, cwd):
-    """File args of `cat` invocations that actually exist on disk."""
+def _existing_file_args(arg_str, cwd):
+    """Non-flag tokens of a command segment that exist on disk."""
     found = []
-    for match in CAT_SEGMENT.finditer(command):
+    try:
+        tokens = shlex.split(arg_str)
+    except ValueError:
+        return found
+    for tok in tokens:
+        if tok.startswith("-"):
+            continue
+        if os.path.isfile(ledger_io.normalize(tok, cwd)):
+            found.append(tok)
+    return found
+
+
+def read_targets(command, cwd):
+    """File args of read-only commands (cat/less/head/tail/…, sed -n) on disk."""
+    found = []
+    for match in READER_SEGMENT.finditer(command):
+        found.extend(_existing_file_args(match.group(1), cwd))
+    for match in SED_SEGMENT.finditer(command):
         try:
             tokens = shlex.split(match.group(1))
         except ValueError:
             continue
-        for tok in tokens:
-            if tok.startswith("-"):
-                continue
-            if os.path.isfile(ledger_io.normalize(tok, cwd)):
-                found.append(tok)
+        in_place = any(t == "-i" or t.startswith(("-i", "--in-place"))
+                       for t in tokens)
+        prints = any(t == "-n" or t == "--quiet" or t == "--silent"
+                     for t in tokens)
+        if prints and not in_place:
+            found.extend(_existing_file_args(match.group(1), cwd))
     return found
 
 
@@ -73,7 +103,7 @@ def extract_paths(tool_name, tool_input, tool_response, cwd, grep_evidence=True)
                     raw.append(m.group(1))
     elif tool_name == "Bash":
         command = tool_input.get("command") or ""
-        raw.extend(cat_targets(command, cwd))
+        raw.extend(read_targets(command, cwd))
         # A truncating write (`>`/tee) succeeded: the model authored the file's
         # entire current content. Appends and sed -i still leave content unseen.
         raw.extend(t for t, mode in shell_scan.write_targets(command)

@@ -74,6 +74,54 @@ class PostRecordTest(unittest.TestCase):
         run_hook("post_record.py", payload("Bash", {"command": "cat /no/such/file.py"}, self.cwd))
         self.assertFalse(os.path.exists(self.ledger))
 
+    def test_bash_less_records_existing_file(self):
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"less {p}"}, self.cwd))
+        self.assertIn(p, self.read_files())
+
+    def test_bash_more_records_existing_file(self):
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"more {p}"}, self.cwd))
+        self.assertIn(p, self.read_files())
+
+    def test_bash_bat_records_existing_file(self):
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"bat {p}"}, self.cwd))
+        self.assertIn(p, self.read_files())
+
+    def test_bash_view_records_existing_file(self):
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"view {p}"}, self.cwd))
+        self.assertIn(p, self.read_files())
+
+    def test_bash_head_records_existing_file(self):
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"head {p}"}, self.cwd))
+        self.assertIn(p, self.read_files())
+
+    def test_bash_head_with_line_flag_records_file_not_count(self):
+        # `head -n 5 file`: the `5` is a count, not a path — only the file grounds
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"head -n 5 {p}"}, self.cwd))
+        self.assertEqual(list(self.read_files()), [p])
+
+    def test_bash_tail_records_existing_file(self):
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"tail -20 {p}"}, self.cwd))
+        self.assertIn(p, self.read_files())
+
+    def test_bash_sed_print_mode_records_file(self):
+        # `sed -n p file` prints (reads) the file without modifying it
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"sed -n p {p}"}, self.cwd))
+        self.assertIn(p, self.read_files())
+
+    def test_bash_sed_without_n_does_not_record(self):
+        # plain `sed 's/a/b/' file` prints transformed content, not the original
+        p = self.touch("a.py")
+        run_hook("post_record.py", payload("Bash", {"command": f"sed 's/a/b/' {p}"}, self.cwd))
+        self.assertFalse(os.path.exists(self.ledger))
+
     def test_unrelated_bash_records_nothing(self):
         run_hook("post_record.py", payload("Bash", {"command": "ls -la"}, self.cwd))
         self.assertFalse(os.path.exists(self.ledger))
