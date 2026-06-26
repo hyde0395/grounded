@@ -156,5 +156,34 @@ class ToggleIntegrationTest(unittest.TestCase):
         self.assertFalse(os.path.exists(ledger_file))
 
 
+class OptInRuleTest(unittest.TestCase):
+    """g-2-recent is a heuristic, so it ships OFF and is enabled per-project."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cwd = os.path.realpath(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_config(self, data):
+        d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "config.json"), "w") as f:
+            f.write(json.dumps(data))
+
+    def test_g2_recent_defaults_off(self):
+        self.assertFalse(ledger_io.load_config(self.cwd)["g-2-recent"])
+
+    def test_default_on_rules_still_default_on(self):
+        cfg = ledger_io.load_config(self.cwd)
+        for rule in ALL_RULES:
+            self.assertTrue(cfg[rule], rule)
+
+    def test_g2_recent_enabled_by_config_file(self):
+        self.write_config({"g-2-recent": True})
+        self.assertTrue(ledger_io.load_config(self.cwd)["g-2-recent"])
+
+
 if __name__ == "__main__":
     unittest.main()

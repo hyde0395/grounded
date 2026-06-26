@@ -24,9 +24,15 @@ LOCK_FILE = "ledger.lock"
 CONFIG_FILE = "config.json"
 
 # Canonical toggle names. g-1s is the shell-write arm of G-1; g-4 is the Stop
-# speech gate (dead links in the answer text); grep-evidence controls whether
-# a Grep counts as having read the file (strict mode: off).
-RULES = ("g-1", "g-1s", "g-2", "g-3", "g-4", "freshness", "grep-evidence")
+# speech gate (dead links in the answer text); g-2-recent is the opt-in
+# recently-published-package warning; grep-evidence controls whether a Grep
+# counts as having read the file (strict mode: off).
+RULES = ("g-1", "g-1s", "g-2", "g-2-recent", "g-3", "g-4", "freshness",
+         "grep-evidence")
+
+# Rules that ship OFF and are enabled per-project (heuristics whose false-WARN
+# rate makes them a deliberate opt-in, not the default).
+OPT_IN = ("g-2-recent",)
 
 
 def _canon(name):
@@ -62,7 +68,7 @@ def load_config(cwd, env=None):
     Absent or corrupt config enables everything (the toggles exist to opt
     out, so failure to read them must not change default behavior).
     """
-    cfg = {rule: True for rule in RULES}
+    cfg = {rule: rule not in OPT_IN for rule in RULES}
     try:
         with open(os.path.join(cwd, LEDGER_DIR, CONFIG_FILE), encoding="utf-8") as f:
             data = json.load(f)

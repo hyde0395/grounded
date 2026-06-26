@@ -141,3 +141,30 @@ def gate_package(ecosystem, name, exists):
             "the correct name before installing.",
         )
     return Verdict(PASS, "package exists" if exists else "registry unknown — not blocking")
+
+
+# Opt-in recency signal (g-2-recent): a hallucinated name an attacker has
+# already squatted *exists*, so the plain existence check passes it. A very
+# recent first-publish date is a weak tell for that case — advisory only, since
+# legitimate new packages share the trait.
+RECENT_PACKAGE_DAYS = 30
+
+
+def gate_package_age(name, created_ts, now, max_age_days=RECENT_PACKAGE_DAYS):
+    """WARN if the package was first published within `max_age_days`; else PASS.
+
+    Never blocks — a recent package is usually legitimate. `created_ts` None
+    (unknown / unsupported ecosystem) passes silently.
+    """
+    if created_ts is None:
+        return Verdict(PASS, "creation date unknown")
+    age_days = (now - created_ts) / 86400
+    if age_days <= max_age_days:
+        return Verdict(
+            WARN,
+            f"[grounded G-2] Package '{name}' exists but was first published "
+            f"about {int(age_days)} day(s) ago. Freshly-created packages are "
+            "occasionally squatted under names an LLM hallucinated — confirm "
+            "this is the library you intend before relying on it.",
+        )
+    return Verdict(PASS, "package not recent")

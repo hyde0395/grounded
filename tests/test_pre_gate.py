@@ -456,3 +456,68 @@ class ManifestGateTest(unittest.TestCase):
                    '{"packages":{"node_modules/internalpkg":{}}}')
         r = self.bash("npm install")
         self.assertEqual(r.returncode, 0)
+
+
+sys.path.insert(0, HOOKS_DIR)
+import contextlib  # noqa: E402
+import io  # noqa: E402
+import time as _time  # noqa: E402
+
+import pre_gate  # noqa: E402
+import registry  # noqa: E402
+
+
+class RecentPackageWarnTest(unittest.TestCase):
+    """g-2-recent (opt-in): an existing-but-recently-published package warns.
+
+    Run in-process with `registry` monkeypatched so the suite stays offline —
+    the recency lookup is not cached, so a subprocess test would hit the net."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cwd = os.path.realpath(self.tmp.name)
+        self._check, self._created = registry.check_package, registry.package_created_ts
+        registry.check_package = lambda *a, **k: True
+
+    def tearDown(self):
+        registry.check_package, registry.package_created_ts = self._check, self._created
+        self.tmp.cleanup()
+
+    def arrange(self, age_days, enable=True):
+        d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "ledger.json"), "w") as f:
+            json.dump({"read_files": {}, "verified_urls": {}, "known_pkgs": {},
+                       "warned": {}, "compacted_at": 0}, f)
+        if enable:
+            with open(os.path.join(d, "config.json"), "w") as f:
+                json.dump({"g-2-recent": True}, f)
+        registry.package_created_ts = lambda *a, **k: _time.time() - age_days * 86400
+
+    def run_install(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = pre_gate.gate_bash({
+                "hook_event_name": "PreToolUse", "tool_name": "Bash",
+                "tool_input": {"command": "pip install somepkg"}, "cwd": self.cwd})
+        return rc, buf.getvalue()
+
+    def test_recent_package_warns(self):
+        self.arrange(age_days=5)
+        rc, out = self.run_install()
+        self.assertEqual(rc, 0)
+        self.assertIn("first published", out)
+
+    def test_old_package_no_warn(self):
+        self.arrange(age_days=400)
+        rc, out = self.run_install()
+        self.assertEqual(out, "")
+
+    def test_disabled_no_warn(self):
+        self.arrange(age_days=5, enable=False)
+        rc, out = self.run_install()
+        self.assertEqual(out, "")
+
+
+if __name__ == "__main__":
+    unittest.main()
