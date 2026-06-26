@@ -120,6 +120,14 @@ having read the file — only a full read does. A missing or corrupt config
 enables everything (the toggles exist to opt out, so failing to read them
 must not change default behavior).
 
+One rule is **opt-in** and ships off: `g-2-recent`. When enabled
+(`{ "g-2-recent": true }`), G-2 additionally *warns* (never blocks) if an
+existing package was first published very recently — a weak tell for a
+hallucinated name an attacker has already squatted. It is off by default
+because legitimate new packages share the trait, so it would otherwise warn on
+them. Only npm and crates.io expose a publish date on the existence-check
+endpoint, so the signal is free there and unavailable for the rest.
+
 ## Install
 
 ### As a plugin (recommended)
@@ -247,6 +255,7 @@ The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post
 | v0.6.8 ✅ | re-warn on a second compaction (dedup keyed to the compaction); resolve `cd x && …` reads and `git diff` paths against the right directory | lost re-read prompt after re-compaction, missed reads under `cd`/subdir-git |
 | v0.7.0 ✅ | G-2 also verifies dependencies declared in a **manifest** (`package.json`, `requirements.txt`/`pyproject.toml`, `Cargo.toml`, `Gemfile`, `composer.json`) on a bare install; lockfile/installed deps trusted, custom-source/private-index manifests skipped | hallucinated dep added to a manifest then installed by a name-less command |
 | v0.8.0 ✅ | G-4 speech gate — on `Stop`, scan the finished answer for dead links it cites (block once / warn ambiguous), the first check of plain-text output (code blocks excluded, blocks at most once per turn) | citing a dead link in the answer with no fetch tool ever run |
+| v0.9.0 ✅ | opt-in `g-2-recent` — warn (never block) when an *existing* npm/crates package was first published very recently, a weak tell for an already-squatted hallucinated name; off by default (legitimate new packages share the trait) | hallucinated name an attacker registered before you installed it |
 
 ## License
 
