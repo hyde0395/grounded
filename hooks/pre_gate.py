@@ -13,6 +13,7 @@ import os
 import sys
 import time
 
+import install_scan
 import ledger_io
 import manifest_scan
 import registry
@@ -178,7 +179,7 @@ def _manifest_specs(command, cwd, existing):
     evidence) and any already in `existing`, and returns the rest for the G-2
     existence check. Unreadable manifests are skipped (fail open)."""
     specs, seen = [], set(existing)
-    for eco, rel in shell_scan.manifest_installs(command):
+    for eco, rel in install_scan.manifest_installs(command):
         mpath = ledger_io.normalize(rel, cwd)
         try:
             with open(mpath, encoding="utf-8") as f:
@@ -237,7 +238,7 @@ def gate_bash(payload):
         stops.extend(url_stops)
         warn_pairs.extend(url_warns)
 
-    package_specs = shell_scan.package_specs(command) if cfg["g-2"] else []
+    package_specs = install_scan.package_specs(command) if cfg["g-2"] else []
     if cfg["g-2"]:
         package_specs = list(package_specs)
         package_specs.extend(_manifest_specs(command, cwd, package_specs))
