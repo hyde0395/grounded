@@ -255,6 +255,13 @@ def gate_bash(payload):
         v = verdict.gate_package(ecosystem, name, exists)
         if v.decision == verdict.STOP:
             stops.append(v.reason)
+        elif exists is True and cfg["g-2-recent"] and not budget.exhausted():
+            # opt-in recency tell: an existing-but-freshly-published package may
+            # be a squatted hallucination. Advisory only (WARN), never blocks.
+            created = registry.package_created_ts(ecosystem, name)
+            av = verdict.gate_package_age(name, created, time.time())
+            if av.decision == verdict.WARN:
+                warn_pairs.append((f"g2recent:{key}", av.reason))
 
     warns = []
     if not stops:  # a blocked call delivers no warns — don't claim them yet

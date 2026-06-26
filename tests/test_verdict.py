@@ -173,5 +173,26 @@ class CompactionStalenessTest(unittest.TestCase):
         self.assertIn("compact", v.reason)
 
 
+class PackageAgeTest(unittest.TestCase):
+    NOW = 1_000_000_000
+
+    def test_recent_warns(self):
+        v = verdict.gate_package_age("freshpkg", self.NOW - 5 * 86400, self.NOW)
+        self.assertEqual(v.decision, verdict.WARN)
+        self.assertIn("freshpkg", v.reason)
+
+    def test_old_passes(self):
+        v = verdict.gate_package_age("old", self.NOW - 100 * 86400, self.NOW)
+        self.assertEqual(v.decision, verdict.PASS)
+
+    def test_unknown_date_passes(self):
+        self.assertEqual(
+            verdict.gate_package_age("x", None, self.NOW).decision, verdict.PASS)
+
+    def test_threshold_boundary_warns(self):
+        v = verdict.gate_package_age("x", self.NOW - 30 * 86400, self.NOW)
+        self.assertEqual(v.decision, verdict.WARN)
+
+
 if __name__ == "__main__":
     unittest.main()
