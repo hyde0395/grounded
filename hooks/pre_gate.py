@@ -13,6 +13,7 @@ import os
 import sys
 import time
 
+import apicheck
 import audit
 import install_scan
 import ledger_io
@@ -153,7 +154,7 @@ def gate_file_tool(payload):
     cwd = payload.get("cwd") or "."
     root = ledger_io.resolve_root(cwd)
     cfg = ledger_io.load_config(root)
-    if not (cfg["g-1"] or cfg["freshness"]):
+    if not (cfg["g-1"] or cfg["freshness"] or cfg["g-6"]):
         return 0
     path = ledger_io.normalize(raw, cwd)
     ledger = ledger_io.load_ledger(root)
@@ -167,11 +168,19 @@ def gate_file_tool(payload):
     )
     if v.decision == verdict.STOP and cfg["g-1"]:
         return _emit_audited(root, cfg, [v.reason], [])
-    warns = []
+    warn_pairs = []
     if v.decision == verdict.WARN:
-        warns = _claim_warns(ledger, [(_warn_key(v.reason, path, m, ca), v.reason)])
-        if warns:
-            _save_caches(root, ledger)
+        warn_pairs.append((_warn_key(v.reason, path, m, ca), v.reason))
+    if cfg["g-6"] and payload.get("tool_name") == "Write" and path.endswith(".py"):
+        # opt-in: a Python file being written that imports a symbol the
+        # installed module confidently lacks (no-execution AST check). WARN only.
+        for module, name in apicheck.from_import_symbols(tool_input.get("content") or ""):
+            av = verdict.gate_api_symbol(module, name, apicheck.validate(module, name))
+            if av.decision == verdict.WARN:
+                warn_pairs.append((f"g6:{module}:{name}", av.reason))
+    warns = _claim_warns(ledger, warn_pairs)
+    if warns:
+        _save_caches(root, ledger)
     return _emit_audited(root, cfg, [], warns)
 
 
