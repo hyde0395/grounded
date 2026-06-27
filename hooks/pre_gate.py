@@ -17,6 +17,7 @@ import install_scan
 import ledger_io
 import manifest_scan
 import registry
+import custom_rules
 import shell_scan
 import urlcheck
 import verdict
@@ -263,6 +264,14 @@ def gate_bash(payload):
             av = verdict.gate_package_age(name, created, time.time())
             if av.decision == verdict.WARN:
                 warn_pairs.append((f"g2recent:{key}", av.reason))
+
+    if cfg["custom-rules"]:
+        for action, msg in custom_rules.evaluate(
+                custom_rules.load(root), "Bash", payload.get("tool_input") or {}):
+            if action == "block":
+                stops.append(msg)
+            else:
+                warn_pairs.append((f"custom:{msg}", msg))
 
     warns = []
     if not stops:  # a blocked call delivers no warns — don't claim them yet

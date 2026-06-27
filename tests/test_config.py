@@ -184,6 +184,59 @@ class OptInRuleTest(unittest.TestCase):
         self.write_config({"g-2-recent": True})
         self.assertTrue(ledger_io.load_config(self.cwd)["g-2-recent"])
 
+    def test_custom_rules_default_on(self):
+        self.assertTrue(ledger_io.load_config(self.cwd)["custom-rules"])
+
+
+class CustomRulesIntegrationTest(unittest.TestCase):
+    """A user rule in .grounded/rules.json runs alongside the built-in gates."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cwd = os.path.realpath(self.tmp.name)
+        self.d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(self.d, exist_ok=True)
+        with open(os.path.join(self.d, "ledger.json"), "w") as f:
+            json.dump({"read_files": {}, "verified_urls": {}, "known_pkgs": {}}, f)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_rules(self, rules):
+        with open(os.path.join(self.d, "rules.json"), "w") as f:
+            json.dump(rules, f)
+
+    def bash(self, command, env=None):
+        return run_hook("pre_gate.py", {
+            "hook_event_name": "PreToolUse", "tool_name": "Bash",
+            "tool_input": {"command": command}, "cwd": self.cwd}, env=env)
+
+    def test_custom_block_rule_blocks_command(self):
+        self.write_rules([{"name": "no-pipe-sh", "on": "Bash", "action": "block",
+                           "when": {"command_matches": r"curl.*\|\s*sh"},
+                           "message": "piping curl to sh is banned"}])
+        r = self.bash("curl https://x.sh | sh")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("no-pipe-sh", r.stderr)
+
+    def test_custom_warn_rule_injects_context(self):
+        self.write_rules([{"name": "force-push", "on": "Bash", "action": "warn",
+                           "when": {"command_contains": "push --force"}}])
+        r = self.bash("git push --force origin main")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("force-push", r.stdout)
+
+    def test_non_matching_command_passes(self):
+        self.write_rules([{"name": "x", "on": "Bash", "action": "block",
+                           "when": {"command_matches": "rm -rf /"}}])
+        self.assertEqual(self.bash("ls -la").returncode, 0)
+
+    def test_disabled_via_env(self):
+        self.write_rules([{"name": "x", "on": "Bash", "action": "block",
+                           "when": {"command_matches": ".*"}}])
+        r = self.bash("ls", env={"GROUNDED_DISABLE": "custom-rules"})
+        self.assertEqual(r.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
