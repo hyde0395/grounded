@@ -184,6 +184,52 @@ class OptInRuleTest(unittest.TestCase):
         self.write_config({"g-2-recent": True})
         self.assertTrue(ledger_io.load_config(self.cwd)["g-2-recent"])
 
+    def test_audit_defaults_off(self):
+        self.assertFalse(ledger_io.load_config(self.cwd)["audit"])
+
+
+class AuditIntegrationTest(unittest.TestCase):
+    """opt-in `audit` writes one JSONL line per surfaced gate decision."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cwd = os.path.realpath(self.tmp.name)
+        self.d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(self.d, exist_ok=True)
+        with open(os.path.join(self.d, "ledger.json"), "w") as f:
+            json.dump({"read_files": {}, "verified_urls": {},
+                       "known_pkgs": {"pypi:reqests": False}}, f)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def enable_audit(self):
+        with open(os.path.join(self.d, "config.json"), "w") as f:
+            json.dump({"audit": True}, f)
+
+    def install(self):
+        return run_hook("pre_gate.py", {
+            "hook_event_name": "PreToolUse", "tool_name": "Bash",
+            "tool_input": {"command": "pip install reqests"}, "cwd": self.cwd})
+
+    @property
+    def audit_path(self):
+        return os.path.join(self.d, "audit.jsonl")
+
+    def test_block_is_logged_when_enabled(self):
+        self.enable_audit()
+        r = self.install()
+        self.assertEqual(r.returncode, 2)
+        with open(self.audit_path) as f:
+            rows = [json.loads(ln) for ln in f if ln.strip()]
+        self.assertEqual(rows[0]["decision"], "block")
+        self.assertIn("reqests", rows[0]["reason"])
+
+    def test_nothing_logged_when_disabled(self):
+        r = self.install()
+        self.assertEqual(r.returncode, 2)
+        self.assertFalse(os.path.exists(self.audit_path))
+
 
 if __name__ == "__main__":
     unittest.main()

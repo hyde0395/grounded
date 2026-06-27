@@ -302,10 +302,10 @@ Corruption handling differs by reader, and on purpose:
 
 ## Test matrix
 
-352 test methods, all offline (network code is exercised through injected fake
+359 test methods, all offline (network code is exercised through injected fake
 openers, never the real internet — several methods loop over multiple cases, so
 the asserted-case count is higher). Run with
-`python3 -m unittest discover -s tests` → `Ran 352 tests … OK`. By area:
+`python3 -m unittest discover -s tests` → `Ran 359 tests … OK`. By area:
 
 | File | Count | What it pins down |
 |---|--:|---|
@@ -321,6 +321,7 @@ the asserted-case count is higher). Run with
 | `test_root.py` | 7 | Root anchoring: `$CLAUDE_PROJECT_DIR` wins, walk-up to `.grounded/`, fallback to cwd, bogus env ignored; edits/reads from a subdir cwd still see/accrue into the root ledger. |
 | `test_session_start.py` | 9 | Lifecycle: startup/clear reset, resume keeps, resume+corrupt heals to empty, compact marks `compacted_at` while keeping reads, resume does not mark it, prompt-rule injection, garbage stdin exits 0. |
 | `test_budget.py` | 3 | Network budget: exhausted budget skips uncached lookups, cached dead URL still blocks after deadline, fresh budget performs the lookup. |
+| `test_audit.py` | 4 | Opt-in audit log (`.grounded/audit.jsonl`, separate from the ledger): one JSONL line per surfaced decision (`{ts, decision, reason}`), appends across calls, no events → no file, unwritable path swallowed (auditing never crashes). |
 | `test_manifest_scan.py` | 25 | Manifest dependency parsing (G-2 input): package.json/requirements.txt/pyproject.toml/Cargo.toml/Gemfile/composer.json name extraction; git/path/url/workspace/platform deps skipped; custom-source/private-index → whole file skipped; corrupt content → `[]`; TOML via `tomllib` or regex fallback; `grounded_names` reads package-lock/node_modules/composer.lock as positive evidence. |
 | `test_text_scan.py` | 13 | Pure URL extraction from answer prose: plain/http+https, order-preserving dedup, non-http schemes ignored, code-fence & inline-code masking (illustrative URLs skipped), markdown-link/autolink/paren/quote unwrapping, trailing-punctuation stripping. |
 | `test_stop_gate.py` | 13 | G-4 speech gate end-to-end: dead (404/DNS) cited link→`decision:block`, alive→silent, ambiguous(403)→`additionalContext` warn (once per session), code-fence link not gated, `stop_hook_active`→silent (block once per turn), trailing tool-use event ignored, no-transcript/no-URL/disabled(env+file)/corrupt-ledger→fail open. |
