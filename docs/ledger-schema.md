@@ -8,8 +8,8 @@ to do it, not the way.**
 
 > **Scope.** Everything below is read off the implementation in `hooks/`
 > (`ledger_io.py`, `post_record.py`, `pre_gate.py`, `stop_gate.py`,
-> `verdict.py`, `shell_scan.py`, `text_scan.py`). If the code and this doc
-> ever disagree, the code wins.
+> `verdict.py`, `shell_scan.py`, `install_scan.py`, `manifest_scan.py`,
+> `text_scan.py`). If the code and this doc ever disagree, the code wins.
 
 ---
 
@@ -310,7 +310,8 @@ the asserted-case count is higher). Run with
 | File | Count | What it pins down |
 |---|--:|---|
 | `test_verdict.py` | 32 | Pure decisions: unread→STOP, read→PASS, new-file Write→PASS, freshness slack/stale→WARN, compaction-staleness (read before vs after compaction)→WARN/PASS, shell truncate/inplace→STOP vs append→WARN, URL alive/dead/ambiguous, package exists/absent/unknown. |
-| `test_shell_scan.py` | 108 | Command parsing: `sed -i`/`perl -i`/`awk -i inplace`/`tee`/redirect (`>`,`>\|`)/`dd of=`/`truncate` targets & modes, `cp`/`mv` overwrite (+ `-n`/`-t` bail-outs), batch hints (`xargs`/`find -exec`), install specs across pip/uv/poetry/npm/pnpm/yarn/bun/cargo/gem/bundler/composer (+ custom-index skip), **bare manifest-install detection** (`npm install`→package.json, `pip install -r`, `poetry/bundle/composer install`, `cargo build`), leading-`cd` resolution, fetch-URL extraction (GET only, POST skipped), heredoc/quote masking, segment splitting & dedup. |
+| `test_shell_scan.py` | 66 | Shell lexing + write/fetch extraction: `sed -i`/`perl -i`/`awk -i inplace`/`tee`/redirect (`>`,`>\|`)/`dd of=`/`truncate` targets & modes, `cp`/`mv` overwrite (+ `-n`/`-t` bail-outs), batch hints (`xargs`/`find -exec`), leading-`cd` resolution, fetch-URL extraction (GET only, POST skipped), heredoc/quote masking, segment splitting & dedup. |
+| `test_install_scan.py` | 42 | Install/dependency parsing (split out of shell_scan): install specs across pip/uv/poetry/npm/pnpm/yarn/bun/cargo/gem/bundler/composer (+ custom-index/registry skip), **bare manifest-install detection** (`npm install`→package.json, `pip install -r`, `poetry/bundle/composer install`, `cargo build`), name extraction & version/extras stripping, sudo/env-prefix, dedup. |
 | `test_pre_gate.py` | 48 | The gate end-to-end: edit/Write of unread vs read file (exit 2 vs 0), missing ledger blocks, corrupt ledger fails open, garbage stdin fails open, stale→WARN via `additionalContext` (+ dedup), read-before-compaction→WARN (re-warns on a *second* compaction), shell `sed -i`/truncate→block, append→warn, `cp` onto existing→block, cached absent-package→block & alive→pass without network, **`npm install` with a hallucinated manifest dep→block, real dep→pass, missing manifest→pass, lockfile dep not re-checked**, `WebFetch`/`curl` to cached dead URL→block, localhost not checked. |
 | `test_config.py` | 17 | Per-rule toggles via `.grounded/config.json` + `GROUNDED_DISABLE` env (case/underscore-insensitive, env overrides file, unknown names ignored, corrupt config fails open) and end-to-end that disabled rules stop gating/recording. |
 | `test_post_record.py` | 34 | Accrual: Read/Grep-single-file/Write record; shell viewers (`cat`/`less`/`head`/`tail`/`bat`/`view`/`sed -n`) record, leading-`cd` resolves relative reads; Grep-on-dir, blind append, `cp` dest, `sed -i` record nothing; truncate write & `git diff`/`git show` post-image paths (resolved against repo root) record; **parallel 12-recorder no-loss test**; lock-free degradation; corrupt-ledger heal. |
