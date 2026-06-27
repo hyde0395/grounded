@@ -184,6 +184,50 @@ class OptInRuleTest(unittest.TestCase):
         self.write_config({"g-2-recent": True})
         self.assertTrue(ledger_io.load_config(self.cwd)["g-2-recent"])
 
+    def test_g6_defaults_off(self):
+        self.assertFalse(ledger_io.load_config(self.cwd)["g-6"])
+
+
+class G6IntegrationTest(unittest.TestCase):
+    """opt-in g-6 warns when a written .py imports a symbol the module lacks."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cwd = os.path.realpath(self.tmp.name)
+        self.d = os.path.join(self.cwd, ".grounded")
+        os.makedirs(self.d, exist_ok=True)
+        with open(os.path.join(self.d, "ledger.json"), "w") as f:
+            json.dump({"read_files": {}, "verified_urls": {}, "known_pkgs": {}}, f)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def enable_g6(self):
+        with open(os.path.join(self.d, "config.json"), "w") as f:
+            json.dump({"g-6": True}, f)
+
+    def write_py(self, content, name="new_mod.py", env=None):
+        return run_hook("pre_gate.py", {
+            "hook_event_name": "PreToolUse", "tool_name": "Write",
+            "tool_input": {"file_path": os.path.join(self.cwd, name),
+                           "content": content}, "cwd": self.cwd}, env=env)
+
+    def test_hallucinated_symbol_warns(self):
+        self.enable_g6()
+        r = self.write_py("from json import dumpz\n")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("dumpz", r.stdout)
+        self.assertIn("G-6", r.stdout)
+
+    def test_real_symbol_silent(self):
+        self.enable_g6()
+        r = self.write_py("from json import dumps\n")
+        self.assertEqual(r.stdout, "")
+
+    def test_disabled_by_default(self):
+        r = self.write_py("from json import dumpz\n")
+        self.assertEqual(r.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()

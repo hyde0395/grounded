@@ -78,6 +78,7 @@ agent chasing the warning instead of the task.
 | **G-2** Verify-before-install | A package can't be installed unless it exists on its registry — npm (npm/pnpm/yarn/bun), PyPI (pip/uv/poetry), crates.io (cargo), RubyGems (gem/bundler), Packagist (composer). Also checks **dependencies declared in a manifest** when a bare install resolves it (`npm install` → `package.json`, `pip install -r`, `poetry/bundle/composer install`, `cargo build`); deps already in a lockfile/installed are trusted as-is | ✅ v0.2 |
 | **G-3** Fetch-before-cite | Dead URLs (404/410/DNS failure) are blocked; ambiguous ones (403/5xx/timeout) only warn | ✅ v0.3 |
 | **G-4** Live-links-in-answers | On `Stop`, the final answer text is scanned for the URLs it cites: a dead one (404/410/DNS) blocks the turn **once** so the model fixes it; ambiguous ones (403/5xx) warn. Links inside code blocks are treated as illustrative and skipped | ✅ v0.8 |
+| **G-6** API-symbol check *(opt-in)* | On `Write` of a `.py` file, `from X import Y` is checked against the installed module's top-level names **without importing it** (AST + `find_spec`); a confidently-absent symbol → warning. Stays silent for any module it can't fully resolve offline (C-extensions, star-imports, dynamic `__getattr__`) | ✅ v0.9-opt-in |
 | **freshness** Stale-read detection | A file that changed on disk *after* it was read → warning to re-read before relying on it | ✅ v0.5 |
 
 When a rule blocks, the model receives an actionable reason:

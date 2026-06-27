@@ -168,3 +168,19 @@ def gate_package_age(name, created_ts, now, max_age_days=RECENT_PACKAGE_DAYS):
             "this is the library you intend before relying on it.",
         )
     return Verdict(PASS, "package not recent")
+
+
+def gate_api_symbol(module, name, exists):
+    """G-6 (opt-in): WARN if `from module import name` names a symbol the
+    installed module confidently lacks. `exists` is apicheck.validate's
+    tri-state — only False warns; None (unverifiable) and True pass silently.
+    Advisory only, never blocks."""
+    if exists is False:
+        return Verdict(
+            WARN,
+            f"[grounded G-6] '{name}' is not a top-level name of '{module}' "
+            "(checked against the installed module without importing it). This "
+            "may be a hallucinated API — verify the symbol exists before relying "
+            "on it.",
+        )
+    return Verdict(PASS, "symbol present or unverifiable")
