@@ -14,10 +14,12 @@ import sys
 import time
 
 import apicheck
+import audit
 import install_scan
 import ledger_io
 import manifest_scan
 import registry
+import custom_rules
 import shell_scan
 import urlcheck
 import verdict
@@ -165,7 +167,7 @@ def gate_file_tool(payload):
         ledger["read_files"], mtime=m, compacted_at=ca,
     )
     if v.decision == verdict.STOP and cfg["g-1"]:
-        return _emit([v.reason], [])
+        return _emit_audited(root, cfg, [v.reason], [])
     warn_pairs = []
     if v.decision == verdict.WARN:
         warn_pairs.append((_warn_key(v.reason, path, m, ca), v.reason))
@@ -179,7 +181,7 @@ def gate_file_tool(payload):
     warns = _claim_warns(ledger, warn_pairs)
     if warns:
         _save_caches(root, ledger)
-    return _emit([], warns)
+    return _emit_audited(root, cfg, [], warns)
 
 
 def _manifest_specs(command, cwd, existing):
@@ -273,13 +275,21 @@ def gate_bash(payload):
             if av.decision == verdict.WARN:
                 warn_pairs.append((f"g2recent:{key}", av.reason))
 
+    if cfg["custom-rules"]:
+        for action, msg in custom_rules.evaluate(
+                custom_rules.load(root), "Bash", payload.get("tool_input") or {}):
+            if action == "block":
+                stops.append(msg)
+            else:
+                warn_pairs.append((f"custom:{msg}", msg))
+
     warns = []
     if not stops:  # a blocked call delivers no warns — don't claim them yet
         warns = _claim_warns(ledger, warn_pairs)
         dirty = dirty or bool(warns)
     if dirty:
         _save_caches(root, ledger)
-    return _emit(stops, warns)
+    return _emit_audited(root, cfg, stops, warns)
 
 
 def _save_caches(cwd, ledger):
@@ -297,7 +307,8 @@ def gate_webfetch(payload):
     if not url:
         return 0
     root = ledger_io.resolve_root(payload.get("cwd") or ".")
-    if not ledger_io.load_config(root)["g-3"]:
+    cfg = ledger_io.load_config(root)
+    if not cfg["g-3"]:
         return 0
     ledger = ledger_io.load_ledger(root)
     if ledger is None:
@@ -309,6 +320,17 @@ def gate_webfetch(payload):
         dirty = dirty or bool(warns)
     if dirty:
         _save_caches(root, ledger)
+    return _emit_audited(root, cfg, stops, warns)
+
+
+def _emit_audited(root, cfg, stops, warns):
+    """Like _emit, but also append the surfaced decisions to the audit log when
+    the opt-in `audit` rule is on. Auditing is best-effort and never affects the
+    verdict."""
+    if cfg.get("audit"):
+        audit.record(root,
+                     [{"decision": "block", "reason": r} for r in stops]
+                     + [{"decision": "warn", "reason": r} for r in warns])
     return _emit(stops, warns)
 
 
