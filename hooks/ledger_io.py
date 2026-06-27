@@ -26,10 +26,11 @@ CONFIG_FILE = "config.json"
 # Canonical toggle names. g-1s is the shell-write arm of G-1; g-4 is the Stop
 # speech gate (dead links in the answer text); g-2-recent is the opt-in
 # recently-published-package warning; audit is the opt-in decision log;
-# grep-evidence controls whether a Grep counts as having read the file
+# custom-rules runs user rules from .grounded/rules.json (inert without that
+# file); grep-evidence controls whether a Grep counts as having read the file
 # (strict mode: off).
 RULES = ("g-1", "g-1s", "g-2", "g-2-recent", "g-3", "g-4", "audit",
-         "freshness", "grep-evidence")
+         "custom-rules", "freshness", "grep-evidence")
 
 # Rules that ship OFF and are enabled per-project (heuristics or side-features
 # that are a deliberate opt-in, not the default).

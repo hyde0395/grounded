@@ -302,10 +302,10 @@ Corruption handling differs by reader, and on purpose:
 
 ## Test matrix
 
-359 test methods, all offline (network code is exercised through injected fake
+378 test methods, all offline (network code is exercised through injected fake
 openers, never the real internet — several methods loop over multiple cases, so
 the asserted-case count is higher). Run with
-`python3 -m unittest discover -s tests` → `Ran 359 tests … OK`. By area:
+`python3 -m unittest discover -s tests` → `Ran 378 tests … OK`. By area:
 
 | File | Count | What it pins down |
 |---|--:|---|
@@ -313,7 +313,7 @@ the asserted-case count is higher). Run with
 | `test_shell_scan.py` | 66 | Shell lexing + write/fetch extraction: `sed -i`/`perl -i`/`awk -i inplace`/`tee`/redirect (`>`,`>\|`)/`dd of=`/`truncate` targets & modes, `cp`/`mv` overwrite (+ `-n`/`-t` bail-outs), batch hints (`xargs`/`find -exec`), leading-`cd` resolution, fetch-URL extraction (GET only, POST skipped), heredoc/quote masking, segment splitting & dedup. |
 | `test_install_scan.py` | 42 | Install/dependency parsing (split out of shell_scan): install specs across pip/uv/poetry/npm/pnpm/yarn/bun/cargo/gem/bundler/composer (+ custom-index/registry skip), **bare manifest-install detection** (`npm install`→package.json, `pip install -r`, `poetry/bundle/composer install`, `cargo build`), name extraction & version/extras stripping, sudo/env-prefix, dedup. |
 | `test_pre_gate.py` | 48 | The gate end-to-end: edit/Write of unread vs read file (exit 2 vs 0), missing ledger blocks, corrupt ledger fails open, garbage stdin fails open, stale→WARN via `additionalContext` (+ dedup), read-before-compaction→WARN (re-warns on a *second* compaction), shell `sed -i`/truncate→block, append→warn, `cp` onto existing→block, cached absent-package→block & alive→pass without network, **`npm install` with a hallucinated manifest dep→block, real dep→pass, missing manifest→pass, lockfile dep not re-checked**, `WebFetch`/`curl` to cached dead URL→block, localhost not checked. |
-| `test_config.py` | 17 | Per-rule toggles via `.grounded/config.json` + `GROUNDED_DISABLE` env (case/underscore-insensitive, env overrides file, unknown names ignored, corrupt config fails open) and end-to-end that disabled rules stop gating/recording. |
+| `test_config.py` | 25 | Per-rule toggles via `.grounded/config.json` + `GROUNDED_DISABLE` env (case/underscore-insensitive, env overrides file, unknown names ignored, corrupt config fails open), opt-in defaults (g-2-recent/audit off, custom-rules on), and end-to-end that disabled rules stop gating/recording plus the audit-log and custom-rule integrations. |
 | `test_post_record.py` | 34 | Accrual: Read/Grep-single-file/Write record; shell viewers (`cat`/`less`/`head`/`tail`/`bat`/`view`/`sed -n`) record, leading-`cd` resolves relative reads; Grep-on-dir, blind append, `cp` dest, `sed -i` record nothing; truncate write & `git diff`/`git show` post-image paths (resolved against repo root) record; **parallel 12-recorder no-loss test**; lock-free degradation; corrupt-ledger heal. |
 | `test_urlcheck.py` | 18 | Liveness: 200/404/410/403 statuses, DNS→0, refused/timeout→None, HEAD→GET retry on 405/403, private/loopback/link-local/metadata hosts not checkable, fragment stripping. |
 | `test_registry.py` | 18 | Existence tri-state across npm/PyPI/crates/RubyGems/Packagist: 200→True, 404/410→False, 403/network/timeout→None, scoped-npm URL-quoting, Packagist vendor-slash preserved, unknown ecosystem→None. |
@@ -322,6 +322,7 @@ the asserted-case count is higher). Run with
 | `test_session_start.py` | 9 | Lifecycle: startup/clear reset, resume keeps, resume+corrupt heals to empty, compact marks `compacted_at` while keeping reads, resume does not mark it, prompt-rule injection, garbage stdin exits 0. |
 | `test_budget.py` | 3 | Network budget: exhausted budget skips uncached lookups, cached dead URL still blocks after deadline, fresh budget performs the lookup. |
 | `test_audit.py` | 4 | Opt-in audit log (`.grounded/audit.jsonl`, separate from the ledger): one JSONL line per surfaced decision (`{ts, decision, reason}`), appends across calls, no events → no file, unwritable path swallowed (auditing never crashes). |
+| `test_custom_rules.py` | 19 | User rules (`.grounded/rules.json`): `command_matches`/`command_contains`/`path_matches` predicates, `on` tool match (str or list), block/warn actions, empty-`when` matches tool, and the conservative skips (invalid action, bad regex, unknown predicate, non-dict rule, corrupt/non-list file → no fire). |
 | `test_manifest_scan.py` | 25 | Manifest dependency parsing (G-2 input): package.json/requirements.txt/pyproject.toml/Cargo.toml/Gemfile/composer.json name extraction; git/path/url/workspace/platform deps skipped; custom-source/private-index → whole file skipped; corrupt content → `[]`; TOML via `tomllib` or regex fallback; `grounded_names` reads package-lock/node_modules/composer.lock as positive evidence. |
 | `test_text_scan.py` | 13 | Pure URL extraction from answer prose: plain/http+https, order-preserving dedup, non-http schemes ignored, code-fence & inline-code masking (illustrative URLs skipped), markdown-link/autolink/paren/quote unwrapping, trailing-punctuation stripping. |
 | `test_stop_gate.py` | 13 | G-4 speech gate end-to-end: dead (404/DNS) cited link→`decision:block`, alive→silent, ambiguous(403)→`additionalContext` warn (once per session), code-fence link not gated, `stop_hook_active`→silent (block once per turn), trailing tool-use event ignored, no-transcript/no-URL/disabled(env+file)/corrupt-ledger→fail open. |

@@ -136,6 +136,30 @@ warning — is appended as one JSON line to `.grounded/audit.jsonl`
 gated and why*. It is a separate append-only file, not the ledger (the ledger
 is keyed current-state by design), and writing it never affects the verdict.
 
+### Custom rules
+
+Beyond the built-in gates, you can add project-specific rules in
+`.grounded/rules.json` — a small trigger → predicate → action layer (no LLM,
+no `eval`, just regex/substring matching) that runs **alongside** G-1…G-4:
+
+```json
+[
+  { "name": "no-pipe-to-shell", "on": "Bash", "action": "block",
+    "when": { "command_matches": "curl.*\\|\\s*sh" },
+    "message": "Piping a download straight into a shell is banned here." },
+  { "name": "force-push", "on": "Bash", "action": "warn",
+    "when": { "command_contains": "push --force" } }
+]
+```
+
+`on` is a tool name or list; `when` is one of `command_matches` (regex),
+`command_contains` (substring), or `path_matches` (regex on the edited file) —
+omit it to match the tool unconditionally; `action` is `warn` or `block`.
+Anything malformed (bad regex, unknown predicate) is skipped, never blocks by
+accident. Currently wired for `Bash`; file/fetch tools are a planned increment.
+The whole layer is toggled by `custom-rules` (on by default, inert without the
+file).
+
 ## Install
 
 ### As a plugin (recommended)
