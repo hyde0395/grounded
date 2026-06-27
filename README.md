@@ -129,6 +129,13 @@ because legitimate new packages share the trait, so it would otherwise warn on
 them. Only npm and crates.io expose a publish date on the existence-check
 endpoint, so the signal is free there and unavailable for the rest.
 
+A second opt-in is `audit` (also off by default). When enabled
+(`{ "audit": true }`), every decision grounded surfaces — each block and each
+warning — is appended as one JSON line to `.grounded/audit.jsonl`
+(`{ts, decision, reason}`), giving a team an accountability trail of *what was
+gated and why*. It is a separate append-only file, not the ledger (the ledger
+is keyed current-state by design), and writing it never affects the verdict.
+
 ## Install
 
 ### As a plugin (recommended)

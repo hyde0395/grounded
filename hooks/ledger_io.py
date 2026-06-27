@@ -25,14 +25,15 @@ CONFIG_FILE = "config.json"
 
 # Canonical toggle names. g-1s is the shell-write arm of G-1; g-4 is the Stop
 # speech gate (dead links in the answer text); g-2-recent is the opt-in
-# recently-published-package warning; grep-evidence controls whether a Grep
-# counts as having read the file (strict mode: off).
-RULES = ("g-1", "g-1s", "g-2", "g-2-recent", "g-3", "g-4", "freshness",
-         "grep-evidence")
+# recently-published-package warning; audit is the opt-in decision log;
+# grep-evidence controls whether a Grep counts as having read the file
+# (strict mode: off).
+RULES = ("g-1", "g-1s", "g-2", "g-2-recent", "g-3", "g-4", "audit",
+         "freshness", "grep-evidence")
 
-# Rules that ship OFF and are enabled per-project (heuristics whose false-WARN
-# rate makes them a deliberate opt-in, not the default).
-OPT_IN = ("g-2-recent",)
+# Rules that ship OFF and are enabled per-project (heuristics or side-features
+# that are a deliberate opt-in, not the default).
+OPT_IN = ("g-2-recent", "audit")
 
 
 def _canon(name):
