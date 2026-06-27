@@ -129,6 +129,13 @@ because legitimate new packages share the trait, so it would otherwise warn on
 them. Only npm and crates.io expose a publish date on the existence-check
 endpoint, so the signal is free there and unavailable for the rest.
 
+A second opt-in is `audit` (also off by default). When enabled
+(`{ "audit": true }`), every decision grounded surfaces — each block and each
+warning — is appended as one JSON line to `.grounded/audit.jsonl`
+(`{ts, decision, reason}`), giving a team an accountability trail of *what was
+gated and why*. It is a separate append-only file, not the ledger (the ledger
+is keyed current-state by design), and writing it never affects the verdict.
+
 ### Custom rules
 
 Beyond the built-in gates, you can add project-specific rules in
@@ -231,6 +238,7 @@ We'd rather tell you up front than have you find out:
 - **G-1's read-before-edit overlaps the built-in; its real value is elsewhere.** Claude Code's built-in validation already rejects `Edit` on a never-read file, so that part of G-1 is just defense-in-depth (and a fallback for agents without it). G-1's distinct value is what the built-in *doesn't* do: gating shell-level writes (`sed -i`/`tee`/`cp`/redirects) the built-in ignores entirely, counting `cat`/`grep`/`git diff` as evidence, and the freshness/compaction staleness checks. Read the rule as "grounding for the write paths and time-axis the built-in skips," not "read-before-edit."
 - **Bot walls cause false signals.** Cloudflare answering `curl` with 403 doesn't mean the link is dead — which is exactly why G-3 warns instead of blocks on 403.
 - **grounded is not an adversarial boundary.** Shell-write gating catches the common idioms (`sed -i`, `tee`, redirections) — the lazy path, not the evasive one. A model that deliberately hides a write behind `python -c` or base64 isn't being sloppy, it's evading a guardrail; that's a security problem, and the answer is sandboxing and permissions — the layer grounded explicitly complements, not replaces.
+- **Where grounded fits in the failure landscape.** An incident study of deployed coding agents ([Al Hasan & Biswas 2026](https://arxiv.org/abs/2605.30777), 547 confirmed safety failures) found four dominant failure types: *constraint violations, destructive operations, authorization bypasses, and deception (fabricated success reports)*. grounded is deliberately narrow about which of these it touches: it enforces the **grounding** slice — don't act on an unverified file/package/URL — which overlaps "constraint violations" and supply-chain risk. It only *partly* reaches **deception** (G-4 catches a fabricated *link* in an answer, not a fabricated *claim*), and it does **not** address destructive operations or authorization bypasses — those are the security/sandboxing layer grounded complements. The same study's conclusion ("guardrails must go beyond adversarial-prompt defenses to enforce environmental constraints, failure transparency, and safe-halt") is a fair map of what a deterministic grounding gate does and does not cover.
 - **What we promise:** grounding enforcement at the tool boundary. **What we don't:** catching every hallucination.
 
 ## Related work
@@ -250,12 +258,23 @@ recently formalized:
   ungrounded action.
 - The package-hallucination problem G-2 targets is quantified in
   [*"We Have a Package for You!"*](https://arxiv.org/abs/2406.10279)
-  (USENIX Security 2025).
+  (USENIX Security 2025), and re-measured on 2026 frontier models in
+  [*"The Range Shrinks, the Threat Remains"*](https://arxiv.org/abs/2605.17062)
+  (53 cross-model hallucinated names still registrable by an attacker — the gap
+  the opt-in `g-2-recent` signal targets).
+- **[Deterministic AST hallucination detection](https://arxiv.org/abs/2601.19106)**
+  (FORGE 2026) shows that even *API/identifier* hallucinations inside real
+  libraries can be caught without an LLM, via AST + library introspection —
+  a direction grounded is exploring within its no-execution constraint
+  (stub-based, opt-in).
+- **[Open Agent Passport](https://arxiv.org/abs/2603.20953)** pairs deterministic
+  pre-action authorization with a signed audit trail — the model behind
+  grounded's opt-in block-decision audit log.
 
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests   # 336 tests, hooks exercised via real stdin/exit-code interface
+python3 -m unittest discover -s tests   # 352 tests, hooks exercised via real stdin/exit-code interface
 ```
 
 The layout mirrors the architecture: thin entrypoints (`session_start.py`, `post_record.py`, `pre_gate.py`), pure logic (`verdict.py`, `shell_scan.py` — no I/O, no LLM), and side effects at the edges (`ledger_io.py`, `registry.py`, `urlcheck.py`). Network calls take an injectable opener, so the whole suite runs offline.
